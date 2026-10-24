@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Réseau DE · Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ───────── Tokens ───────── */
+:root {
+  color-scheme: light;
+  --page: #f1efe9;
+  --surface: #fbfaf6;
+  --surface-2: #f4f2ec;
+  --line: #e1ded4;
+  --line-strong: #cdc9bc;
+  --ink: #171714;
+  --ink-2: #4f4d46;
+  --ink-3: #807d73;
+  --accent: #f2c230;          /* signal yellow (chrome only, never a data series) */
+  --accent-ink: #171714;
+  --accent-text: #8a6200;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --good: #0ca30c;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --crit: #d03b3b;
+  --grid: rgba(23, 23, 20, .07);
+  --shadow: 0 1px 0 rgba(0,0,0,.04);
+  --radius: 10px;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --sans: "Archivo", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #111110;
+    --surface: #1a1a19;
+    --surface-2: #222220;
+    --line: #2c2c29;
+    --line-strong: #3b3b37;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --ink-3: #8d8b82;
+    --accent-text: #f2c230;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --grid: rgba(240, 239, 236, .07);
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #111110;
+  --surface: #1a1a19;
+  --surface-2: #222220;
+  --line: #2c2c29;
+  --line-strong: #3b3b37;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --ink-3: #8d8b82;
+  --accent-text: #f2c230;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --grid: rgba(240, 239, 236, .07);
+  --shadow: none;
+}
+
+/* ───────── Base ───────── */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.45 var(--sans);
+  font-variation-settings: "wdth" 100;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+
+/* ───────── Shell ───────── */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 18px;
+  padding: 0 20px; height: 56px;
+  background: var(--page);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; font-variation-settings: "wdth" 80; font-size: 17px; }
+.brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); display: grid; place-items: center; }
+.brand-mark i { width: 8px; height: 8px; border-radius: 50%; background: #171714; display: block; }
+.brand small { font-weight: 500; color: var(--ink-3); font-variation-settings: "wdth" 100; font-size: 12px; }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs button {
+  border: 0; background: none; padding: 8px 12px; border-radius: 7px; cursor: pointer;
+  color: var(--ink-2); font-weight: 600; white-space: nowrap; position: relative;
+}
+nav.tabs button:hover { background: var(--surface-2); color: var(--ink); }
+nav.tabs button[aria-selected="true"] { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+nav.tabs .dot { position: absolute; top: 6px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--crit); }
+.top-right { display: flex; align-items: center; gap: 8px; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; height: 32px; min-width: 32px; padding: 0 9px; cursor: pointer; color: var(--ink-2); }
+.icon-btn:hover { color: var(--ink); border-color: var(--line-strong); }
+
+main { max-width: 1320px; margin: 0 auto; padding: 22px 20px 60px; }
+.view-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.view-head h1 { margin: 0; font-size: 28px; line-height: 1.1; letter-spacing: -.02em; font-weight: 800; font-variation-settings: "wdth" 78; }
+.view-head p { margin: 4px 0 0; color: var(--ink-3); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ───────── Primitives ───────── */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 0; }
+.card-h h2 { margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+.card-h .meta { color: var(--ink-3); font-size: 12px; }
+.card-b { padding: 12px 16px 16px; }
+.grid { display: grid; gap: 14px; }
+.g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 980px) { .g-2, .g-3 { grid-template-columns: 1fr; } }
+
+.kpi { padding: 14px 16px; }
+.kpi .label { font-size: 12px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.kpi .value { font-family: var(--mono); font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin-top: 6px; line-height: 1.1; }
+.kpi .sub { margin-top: 6px; font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; }
+.delta { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.delta.up { color: var(--good); }
+.delta.down { color: var(--crit); }
+.delta.flat { color: var(--ink-3); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px;
+  border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface);
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.primary:hover { filter: brightness(.96); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn.danger { color: var(--crit); }
+.btn.sm { height: 28px; padding: 0 9px; font-size: 12px; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 0 11px; height: 32px; cursor: pointer; font-weight: 600; color: var(--ink-2); font-family: var(--mono); font-size: 12px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+select, input[type="text"], input[type="email"], input[type="url"], input[type="number"] {
+  height: 34px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface);
+  padding: 0 10px; min-width: 0;
+}
+select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.status.ok::before { background: var(--good); }
+.status.warn::before { background: var(--warn); }
+.status.crit::before { background: var(--crit); }
+.status.run::before { background: var(--series-1); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover td { background: var(--surface-2); }
+.trunc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted { color: var(--ink-3); }
+.small { font-size: 12px; }
+.bar-cell { position: relative; }
+.bar-cell .b { position: absolute; left: 0; top: 50%; height: 18px; transform: translateY(-50%); background: var(--series-1); opacity: .14; border-radius: 0 4px 4px 0; }
+.bar-cell span { position: relative; }
+
+.chart-box { position: relative; height: 230px; }
+.chart-box.tall { height: 280px; }
+.empty { padding: 28px 16px; text-align: center; color: var(--ink-3); }
+.empty b { color: var(--ink-2); display: block; margin-bottom: 4px; }
+
+/* alerts strip */
+.alert-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.alert-row + .alert-row { margin-top: 8px; }
+.alert-row .sev { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; color: #fff; flex: none; }
+.sev.crit { background: var(--crit); }
+.sev.warn { background: #b26a00; }
+.sev.info { background: var(--series-1); }
+.alert-row .t { flex: 1; min-width: 0; }
+.alert-row .when { color: var(--ink-3); font-size: 12px; }
+
+/* toast */
+#toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+#toast div { background: var(--ink); color: var(--page); padding: 10px 14px; border-radius: 9px; font-weight: 600; max-width: min(560px, 92vw); box-shadow: 0 6px 24px rgba(0,0,0,.18); pointer-events: auto; }
+#toast div.err { background: var(--crit); color: #fff; }
+
+/* login */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.login .card { width: min(420px, 100%); padding: 28px; }
+.login h1 { margin: 14px 0 6px; font-size: 26px; font-weight: 800; font-variation-settings: "wdth" 78; letter-spacing: -.02em; }
+.login p { color: var(--ink-3); margin: 0 0 18px; }
+.login form { display: flex; flex-direction: column; gap: 10px; }
+.login input { width: 100%; height: 40px; }
+.login .btn { height: 40px; justify-content: center; }
+
+.spark { display: block; }
+.hint { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+.kv { display: grid; grid-template-columns: 180px 1fr; gap: 8px 14px; align-items: center; }
+@media (max-width: 640px) { .kv { grid-template-columns: 1fr; } .topbar { padding: 0 12px; gap: 10px; } .brand small { display: none; } main { padding: 16px 12px 60px; } }
+code.copy { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 4px 7px; border-radius: 6px; word-break: break-all; cursor: pointer; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
+.legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.sq { height: 10px; width: 10px; border-radius: 3px; }
+.toggle { position: relative; width: 34px; height: 20px; flex: none; }
+.toggle input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; position: absolute; z-index: 1; }
+.toggle span { position: absolute; inset: 0; border-radius: 999px; background: var(--line-strong); transition: background .15s; }
+.toggle span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform .15s; }
+.toggle input:checked + span { background: var(--good); }
+.toggle input:checked + span::after { transform: translateX(14px); }
+.progress { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; min-width: 80px; }
+.progress i { display: block; height: 100%; background: var(--series-1); }
+</style>
+</head>
+<body>
+
+<!-- ───────── Login ───────── -->
+<section id="login" class="login" hidden>
+  <div class="card">
+    <div class="brand"><span class="brand-mark"><i></i></span> Réseau DE · Control</div>
+    <h1>Connexion</h1>
+    <p>Reçois un lien de connexion par email. Seuls les emails autorisés voient les données.</p>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="ton@email.com" required autocomplete="email">
+      <button class="btn primary" type="submit">Envoyer le lien</button>
+    </form>
+    <p id="login-msg" class="hint"></p>
+  </div>
+</section>
+
+<!-- ───────── App ───────── -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark"><i></i></span> Réseau DE <small>Control</small></div>
+    <nav class="tabs" role="tablist" id="tabs">
+      <button data-view="overview" aria-selected="true">Vue d'ensemble</button>
+      <button data-view="seo">SEO</button>
+      <button data-view="ops">Ops n8n<span class="dot" id="ops-dot" hidden></span></button>
+      <button data-view="pipeline">Pipeline</button>
+      <button data-view="settings">Connexions</button>
+    </nav>
+    <div class="top-right">
+      <button class="icon-btn" id="theme-btn" title="Thème clair / sombre">◐</button>
+      <button class="icon-btn" id="logout-btn" title="Se déconnecter">⎋</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Overview -->
+    <section data-view="overview">
+      <div class="view-head">
+        <div>
+          <h1>Vue d'ensemble</h1>
+          <p id="ov-sub">Tous les sites suivis · données Google J-1</p>
+        </div>
+        <div class="controls">
+          <div class="seg" id="ov-period">
+            <button data-d="7">7 j</button><button data-d="28" aria-pressed="true">28 j</button><button data-d="90">3 m</button>
+          </div>
+        </div>
+      </div>
+      <div id="ov-alerts"></div>
+      <div class="kpis" id="ov-kpis"></div>
+      <div class="grid g-2" style="margin-bottom:14px">
+        <div class="card">
+          <div class="card-h"><h2>Clics Google</h2><span class="meta" id="ov-clicks-meta"></span></div>
+          <div class="card-b"><div class="chart-box"><canvas id="ov-clicks"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Sessions GA4</h2>
+            <div class="legend"><span><i style="background:var(--series-1)"></i>Toutes sources</span><span><i style="background:var(--series-2)"></i>Pinterest</span></div>
+          </div>
+          <div class="card-b"><div class="chart-box"><canvas id="ov-sessions"></canvas></div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h2>Sites</h2><span class="meta">Clique un site pour le détail SEO</span></div>
+        <div class="card-b table-wrap" id="ov-sites"></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Exécutions n8n · 14 jours</h2>
+          <div class="legend"><span><i class="sq" style="background:var(--good)"></i>Succès</span><span><i class="sq" style="background:var(--crit)"></i>Échecs</span></div>
+        </div>
+        <div class="card-b"><div class="chart-box"><canvas id="ov-n8n"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- SEO -->
+    <section data-view="seo" hidden>
+      <div class="view-head">
+        <div>
+          <h1 id="seo-title">SEO</h1>
+          <p id="seo-sub">Search Console + Google Analytics 4</p>
+        </div>
+        <div class="controls">
+          <select id="seo-site"></select>
+          <div class="seg" id="seo-period">
+            <button data-d="7">7 j</button><button data-d="28" aria-pressed="true">28 j</button><button data-d="90">3 m</button><button data-d="180">6 m</button><button data-d="365">12 m</button><button data-d="480">16 m</button>
+          </div>
+        </div>
+      </div>
+      <div class="kpis" id="seo-kpis"></div>
+      <div class="grid g-3" style="margin-bottom:14px">
+        <div class="card"><div class="card-h"><h2>Clics</h2></div><div class="card-b"><div class="chart-box"><canvas id="seo-c-clicks"></canvas></div></div></div>
+        <div class="card"><div class="card-h"><h2>Impressions</h2></div><div class="card-b"><div class="chart-box"><canvas id="seo-c-impr"></canvas></div></div></div>
+        <div class="card"><div class="card-h"><h2>Position moyenne</h2><span class="meta">plus bas = mieux</span></div><div class="card-b"><div class="chart-box"><canvas id="seo-c-pos"></canvas></div></div></div>
+      </div>
+      <div class="grid g-2" style="margin-bottom:14px">
+        <div class="card">
+          <div class="card-h"><h2>Requêtes</h2><span class="meta" id="seo-q-meta"></span></div>
+          <div class="card-b"><input type="text" id="seo-q-filter" placeholder="Filtrer les requêtes…" style="width:100%;margin-bottom:8px"><div class="table-wrap" id="seo-queries"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Pages</h2><span class="meta" id="seo-p-meta"></span></div>
+          <div class="card-b"><input type="text" id="seo-p-filter" placeholder="Filtrer les pages…" style="width:100%;margin-bottom:8px"><div class="table-wrap" id="seo-pages"></div></div>
+        </div>
+      </div>
+      <div class="grid g-3" style="margin-bottom:14px">
+        <div class="card"><div class="card-h"><h2>Gagnants / perdants</h2><span class="meta" id="seo-m-meta"></span></div><div class="card-b table-wrap" id="seo-movers"></div></div>
+        <div class="card"><div class="card-h"><h2>Pays</h2></div><div class="card-b table-wrap" id="seo-countries"></div></div>
+        <div class="card"><div class="card-h"><h2>Appareils</h2></div><div class="card-b table-wrap" id="seo-devices"></div></div>
+      </div>
+      <div class="grid g-2">
+        <div class="card">
+          <div class="card-h"><h2>Sessions GA4</h2>
+            <div class="legend"><span><i style="background:var(--series-1)"></i>Toutes sources</span><span><i style="background:var(--series-2)"></i>Pinterest</span></div>
+          </div>
+          <div class="card-b"><div class="chart-box"><canvas id="seo-c-sessions"></canvas></div></div>
+        </div>
+        <div class="card"><div class="card-h"><h2>Sources de trafic</h2><span class="meta">GA4</span></div><div class="card-b table-wrap" id="seo-sources"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><div class="card-h"><h2>Pages les plus vues</h2><span class="meta">GA4, agrégé par mois</span></div><div class="card-b table-wrap" id="seo-gapages"></div></div>
+    </section>
+
+    <!-- Ops -->
+    <section data-view="ops" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Ops n8n</h1>
+          <p id="ops-sub">Workflows, exécutions, santé des services, alertes</p>
+        </div>
+        <div class="controls">
+          <button class="btn" id="ops-sync-btn">Synchroniser maintenant</button>
+        </div>
+      </div>
+      <div id="ops-config"></div>
+      <div class="kpis" id="ops-kpis"></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h2>Alertes</h2><span class="meta" id="ops-alerts-meta"></span></div>
+        <div class="card-b" id="ops-alerts"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h2>Workflows</h2><span class="meta">« Surveiller » = alertes actives · « Attendu » = minutes max entre deux succès</span></div>
+        <div class="card-b table-wrap" id="ops-wf"></div>
+      </div>
+      <div class="grid g-2">
+        <div class="card">
+          <div class="card-h"><h2>Santé des services</h2><span class="meta">ping toutes les 5 min</span></div>
+          <div class="card-b">
+            <div class="table-wrap" id="ops-health"></div>
+            <form id="hc-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+              <input type="text" id="hc-name" placeholder="Nom (ex. GPU RunPod)" required style="flex:1 1 140px">
+              <input type="url" id="hc-url" placeholder="https://…/health" required style="flex:2 1 220px">
+              <input type="number" id="hc-status" value="200" style="width:80px" title="Code HTTP attendu">
+              <button class="btn" type="submit">Ajouter</button>
+            </form>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Dernières exécutions</h2></div>
+          <div class="card-b table-wrap" id="ops-exec"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pipeline -->
+    <section data-view="pipeline" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Pipeline</h1>
+          <p>Articles → images → pins (Google Sheet via Apps Script)</p>
+        </div>
+      </div>
+      <div class="card" id="pipe-card"></div>
+    </section>
+
+    <!-- Settings -->
+    <section data-view="settings" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Connexions</h1>
+          <p>Comptes Google, sites suivis, intégrations et réglages</p>
+        </div>
+        <div class="controls">
+          <button class="btn primary" id="connect-google">+ Connecter un compte Google</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h2>Comptes Google</h2></div>
+        <div class="card-b table-wrap" id="st-accounts"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h2>Sites détectés</h2>
+          <div class="controls">
+            <button class="btn sm" id="st-track-all">Tout suivre</button>
+            <button class="btn sm" id="st-backfill">Importer l'historique (16 mois)</button>
+            <button class="btn sm ghost" id="st-work">Traiter la file maintenant</button>
+          </div>
+        </div>
+        <div class="card-b table-wrap" id="st-sites"></div>
+      </div>
+      <div class="grid g-2">
+        <div class="card">
+          <div class="card-h"><h2>Intégrations</h2></div>
+          <div class="card-b" id="st-integrations"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Réglages</h2></div>
+          <div class="card-b">
+            <form id="st-form" class="kv"></form>
+            <div style="margin-top:12px"><button class="btn primary" form="st-form" type="submit">Enregistrer</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ───────── Config ───────── */
+const SUPABASE_URL = "https://kuhxuovjlukxdzjnsyzt.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ONExiZZVqMmaEPkJfXGEPw_J1ohmmpV";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true } });
+
+/* ───────── Helpers ───────── */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nf = new Intl.NumberFormat("fr-FR");
+const nfc = new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 });
+const fmt = (n) => n == null ? "—" : (Math.abs(n) >= 10000 ? nfc.format(n) : nf.format(Math.round(n)));
+const fmtPos = (p) => p == null ? "—" : (Math.round(p * 10) / 10).toString().replace(".", ",");
+const fmtPct = (x) => x == null || !isFinite(x) ? "—" : (Math.round(x * 1000) / 10).toString().replace(".", ",") + " %";
+const iso = (d) => d.toISOString().slice(0, 10);
+const daysAgo = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return iso(d); };
+function rel(ts) {
+  if (!ts) return "—";
+  const s = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (s < 60) return "à l'instant";
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  return `il y a ${Math.round(s / 86400)} j`;
+}
+function dur(sec) {
+  if (sec == null) return "—";
+  if (sec < 60) return `${Math.round(sec)} s`;
+  if (sec < 3600) return `${Math.round(sec / 60)} min`;
+  return `${(sec / 3600).toFixed(1).replace(".", ",")} h`;
+}
+function delta(cur, prev, invert = false) {
+  if (!prev) return `<span class="delta flat">—</span>`;
+  const p = (cur - prev) / prev;
+  const good = invert ? p < 0 : p > 0;
+  const cls = Math.abs(p) < 0.005 ? "flat" : good ? "up" : "down";
+  const arrow = p > 0 ? "▲" : p < 0 ? "▼" : "•";
+  return `<span class="delta ${cls}">${arrow} ${fmtPct(Math.abs(p))}</span>`;
+}
+function toast(msg, err = false) {
+  const d = document.createElement("div");
+  d.textContent = msg;
+  if (err) d.className = "err";
+  $("#toast").appendChild(d);
+  setTimeout(() => d.remove(), err ? 7000 : 4000);
+}
+async function rpc(fn, args = {}) {
+  const { data, error } = await sb.rpc(fn, args);
+  if (error) { console.error(fn, error); toast(`${fn} : ${error.message}`, true); return []; }
+  return data || [];
+}
+async function fn(name, body) {
+  const { data, error } = await sb.functions.invoke(name, { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  return data;
+}
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function spark(values, w = 96, h = 26) {
+  if (!values?.length || values.every((v) => !v)) return `<svg class="spark" width="${w}" height="${h}"></svg>`;
+  const max = Math.max(...values, 1);
+  const step = w / Math.max(values.length - 1, 1);
+  const pts = values.map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - (v / max) * (h - 4)).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--series-1)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+function empty(title, text) { return `<div class="empty"><b>${esc(title)}</b>${text || ""}</div>`; }
+
+/* ───────── Charts ───────── */
+const charts = {};
+function chartDefaults() {
+  Chart.defaults.font.family = css("--mono").split(",")[0].replace(/"/g, "") || "monospace";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = css("--ink-3");
+  Chart.defaults.borderColor = css("--grid");
+}
+function lineChart(id, labels, series, opts = {}) {
+  chartDefaults();
+  charts[id]?.destroy();
+  const ctx = document.getElementById(id);
+  charts[id] = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: series.map((s) => ({
+        label: s.label, data: s.data, borderColor: s.color, backgroundColor: s.fill || "transparent",
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBorderWidth: 2,
+        pointHoverBackgroundColor: s.color, pointHoverBorderColor: css("--surface"),
+        tension: 0.25, fill: !!s.fill, spanGaps: true,
+      })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: css("--ink"), titleColor: css("--surface"), bodyColor: css("--surface"),
+          padding: 10, boxPadding: 4, usePointStyle: true,
+          callbacks: {
+            title: (it) => new Date(it[0].label + "T00:00:00Z").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }),
+            label: (it) => ` ${it.dataset.label} : ${opts.pos ? fmtPos(it.raw) : nf.format(it.raw ?? 0)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false }, border: { color: css("--line") },
+          ticks: { maxTicksLimit: 6, maxRotation: 0, callback(v) { const l = this.getLabelForValue(v); return new Date(l + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); } },
+        },
+        y: {
+          reverse: !!opts.pos, beginAtZero: !opts.pos, border: { display: false },
+          grid: { color: css("--grid") },
+          ticks: { maxTicksLimit: 5, callback: (v) => opts.pos ? fmtPos(v) : nfc.format(v) },
+        },
+      },
+    },
+    plugins: [crosshair],
+  });
+}
+const crosshair = {
+  id: "crosshair",
+  afterDraw(chart) {
+    const a = chart.tooltip?.getActiveElements?.();
+    if (!a?.length) return;
+    const x = a[0].element.x, { top, bottom } = chart.chartArea, c = chart.ctx;
+    c.save(); c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom);
+    c.lineWidth = 1; c.strokeStyle = css("--line-strong"); c.stroke(); c.restore();
+  },
+};
+function barChart(id, labels, series) {
+  chartDefaults();
+  charts[id]?.destroy();
+  charts[id] = new Chart(document.getElementById(id), {
+    type: "bar",
+    data: { labels, datasets: series.map((s) => ({ label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 4, borderSkipped: "start", borderColor: css("--surface"), borderWidth: { top: 2, left: 0, right: 0, bottom: 0 }, maxBarThickness: 26 })) },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: css("--ink"), titleColor: css("--surface"), bodyColor: css("--surface"), padding: 10, usePointStyle: true,
+        callbacks: { title: (it) => new Date(it[0].label + "T00:00:00Z").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) } } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { color: css("--line") }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback(v) { return new Date(this.getLabelForValue(v) + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); } } },
+        y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: css("--grid") }, ticks: { maxTicksLimit: 5, precision: 0 } },
+      },
+    },
+  });
+}
+
+/* ───────── State ───────── */
+const state = { view: "overview", ovDays: 28, seoDays: 28, seoSite: "", sites: [], status: null };
+
+/* ───────── Auth ───────── */
+async function boot() {
+  applyTheme();
+  handleHash();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return showLogin();
+  const { data: allowed } = await sb.rpc("is_allowed");
+  if (!allowed) {
+    showLogin();
+    $("#login-msg").textContent = `${session.user.email} n'est pas autorisé sur ce dashboard.`;
+    return;
+  }
+  $("#login").hidden = true;
+  $("#app").hidden = false;
+  const v = (location.hash.match(/view=(\w+)/) || [])[1];
+  go(v || "overview");
+  setInterval(() => { if (!document.hidden) refreshCurrent(true); }, 5 * 60_000);
+}
+function showLogin() { $("#app").hidden = true; $("#login").hidden = false; }
+$("#login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("#login-email").value.trim();
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  $("#login-msg").textContent = error ? `Erreur : ${error.message}` : `Lien envoyé à ${email}. Ouvre-le sur cet appareil.`;
+});
+$("#logout-btn").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+sb.auth.onAuthStateChange((evt) => { if (evt === "SIGNED_IN" && $("#app").hidden) boot(); });
+
+function handleHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const g = h.get("google");
+  if (!g) return;
+  if (g === "connected") toast(`Compte ${h.get("email")} connecté · ${h.get("gsc")} sites GSC, ${h.get("ga4")} propriétés GA4`);
+  else if (g === "partial") toast(`Connecté, mais la découverte a échoué : ${h.get("reason")}`, true);
+  else toast(`Connexion Google échouée : ${h.get("reason")}`, true);
+  history.replaceState(null, "", location.pathname + "#view=settings");
+}
+
+/* ───────── Theme ───────── */
+function applyTheme() {
+  let t = null;
+  try { t = localStorage.getItem("theme"); } catch (_) {}
+  if (t) document.documentElement.dataset.theme = t;
+}
+$("#theme-btn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  const next = dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch (_) {}
+  refreshCurrent(true);
+});
+
+/* ───────── Navigation ───────── */
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-view]"); if (b) go(b.dataset.view); });
+function go(view) {
+  state.view = view;
+  $$("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.view === view));
+  $$("main > section").forEach((s) => (s.hidden = s.dataset.view !== view));
+  history.replaceState(null, "", `#view=${view}`);
+  refreshCurrent();
+}
+function refreshCurrent(silent) {
+  ({ overview: loadOverview, seo: loadSeo, ops: loadOps, pipeline: loadPipeline, settings: loadSettings })[state.view]?.(silent);
+}
+function segBind(id, key, cb) {
+  $(id).addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    $$(`${id} button`).forEach((x) => x.setAttribute("aria-pressed", x === b));
+    state[key] = Number(b.dataset.d); cb();
+  });
+}
+segBind("#ov-period", "ovDays", loadOverview);
+segBind("#seo-period", "seoDays", loadSeo);
+
+/* ───────── Overview ───────── */
+async function loadOverview() {
+  const d = state.ovDays, to = daysAgo(1), from = daysAgo(d), pfrom = daysAgo(2 * d), pto = daysAgo(d + 1);
+  const [sites, series, prev, alerts, wfs, n8nDaily] = await Promise.all([
+    rpc("site_overview", { p_days: d }),
+    rpc("site_series", { p_site: null, p_from: from, p_to: to }),
+    rpc("site_series", { p_site: null, p_from: pfrom, p_to: pto }),
+    sb.from("alerts").select("*").is("resolved_at", null).order("created_at", { ascending: false }).then((r) => r.data || []),
+    rpc("workflow_health"),
+    rpc("n8n_daily", { p_days: 14 }),
+  ]);
+  state.sites = sites;
+  $("#ops-dot").hidden = !alerts.some((a) => a.severity === "crit");
+
+  // alerts strip
+  $("#ov-alerts").innerHTML = alerts.length ? `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Alertes ouvertes · ${alerts.length}</h2><button class="btn sm ghost" onclick="go('ops')">Tout voir →</button></div><div class="card-b">${alerts.slice(0, 3).map(alertRow).join("")}</div></div>` : "";
+
+  const sum = (arr, k) => arr.reduce((a, r) => a + Number(r[k] || 0), 0);
+  const wpos = (arr) => { const i = sum(arr, "impressions"); return i ? arr.reduce((a, r) => a + (r.avg_position || 0) * r.impressions, 0) / i : null; };
+  const tracked = sites.filter((s) => s.tracked);
+  const errs24 = wfs.filter((w) => w.watch && w.active).reduce((a, w) => a + Number(w.errors_24h), 0);
+  const watched = wfs.filter((w) => w.watch && w.active);
+  const red = watched.filter((w) => ["error", "crashed"].includes(w.last_status)).length;
+
+  if (!tracked.length) {
+    $("#ov-kpis").innerHTML = "";
+    $("#ov-sub").textContent = "Aucun site suivi pour l'instant";
+  } else {
+    $("#ov-sub").textContent = `${tracked.length} site${tracked.length > 1 ? "s" : ""} suivi${tracked.length > 1 ? "s" : ""} · ${d} derniers jours vs ${d} jours précédents`;
+  }
+  $("#ov-kpis").innerHTML = [
+    kpi("Clics Google", fmt(sum(series, "clicks")), delta(sum(series, "clicks"), sum(prev, "clicks"))),
+    kpi("Impressions", fmt(sum(series, "impressions")), delta(sum(series, "impressions"), sum(prev, "impressions"))),
+    kpi("Position moy.", fmtPos(wpos(series)), delta(wpos(series) || 0, wpos(prev) || 0, true)),
+    kpi("Sessions GA4", fmt(sum(series, "sessions")), delta(sum(series, "sessions"), sum(prev, "sessions"))),
+    kpi("Sessions Pinterest", fmt(sum(series, "pinterest_sessions")), delta(sum(series, "pinterest_sessions"), sum(prev, "pinterest_sessions"))),
+    kpi("Workflows en échec", `<span style="color:${red ? "var(--crit)" : "inherit"}">${red}</span><span class="muted" style="font-size:16px"> / ${watched.length}</span>`, `<span class="muted">${errs24} erreur${errs24 > 1 ? "s" : ""} sur 24 h</span>`),
+  ].join("");
+
+  const labels = series.map((r) => r.date);
+  lineChart("ov-clicks", labels, [{ label: "Clics", data: series.map((r) => r.clicks), color: css("--series-1") }]);
+  $("#ov-clicks-meta").textContent = series.length ? `${fmt(sum(series, "clicks"))} au total` : "";
+  lineChart("ov-sessions", labels, [
+    { label: "Toutes sources", data: series.map((r) => r.sessions), color: css("--series-1") },
+    { label: "Pinterest", data: series.map((r) => r.pinterest_sessions), color: css("--series-2") },
+  ]);
+  barChart("ov-n8n", n8nDaily.map((r) => r.date), [
+    { label: "Succès", data: n8nDaily.map((r) => r.success), color: css("--good") },
+    { label: "Échecs", data: n8nDaily.map((r) => r.failed), color: css("--crit") },
+  ]);
+
+  // sites table
+  if (!sites.length) {
+    $("#ov-sites").innerHTML = empty("Aucun site encore", `Va dans <a href="#" onclick="go('settings');return false">Connexions</a> et connecte ton compte Google.`);
+    return;
+  }
+  const maxC = Math.max(...tracked.map((s) => s.clicks), 1);
+  $("#ov-sites").innerHTML = `<table><thead><tr>
+    <th>Site</th><th class="r">Clics</th><th class="r">Δ</th><th class="r">Impr.</th><th class="r">Pos.</th>
+    <th class="r">Sessions</th><th class="r">Pinterest</th><th>Tendance clics</th><th>Sync</th></tr></thead><tbody>
+    ${tracked.map((s) => `<tr class="click" data-site="${s.site_id}">
+      <td><b>${esc(s.label || s.domain)}</b>${s.has_gsc ? "" : ' <span class="pill">sans GSC</span>'}${s.has_ga4 ? "" : ' <span class="pill">sans GA4</span>'}</td>
+      <td class="r num bar-cell"><span class="b" style="width:${(s.clicks / maxC) * 100}%"></span><span>${fmt(s.clicks)}</span></td>
+      <td class="r">${delta(s.clicks, s.clicks_prev)}</td>
+      <td class="r num">${fmt(s.impressions)}</td>
+      <td class="r num">${fmtPos(s.avg_position)}</td>
+      <td class="r num">${fmt(s.sessions)} ${delta(s.sessions, s.sessions_prev)}</td>
+      <td class="r num">${fmt(s.pinterest_sessions)}</td>
+      <td>${spark(s.spark)}</td>
+      <td>${s.last_sync_error ? `<span class="status crit" title="${esc(s.last_sync_error)}">Erreur</span>` : s.last_sync_at ? `<span class="status ok">${rel(s.last_sync_at)}</span>` : '<span class="status">En attente</span>'}</td>
+    </tr>`).join("")}</tbody></table>
+    ${sites.length > tracked.length ? `<p class="hint">${sites.length - tracked.length} site(s) détecté(s) mais non suivi(s) — active-les dans Connexions.</p>` : ""}`;
+  $$("#ov-sites tr[data-site]").forEach((tr) => tr.addEventListener("click", () => { state.seoSite = tr.dataset.site; go("seo"); }));
+}
+function kpi(label, value, sub) {
+  return `<div class="card kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub || ""}</div></div>`;
+}
+function alertRow(a) {
+  return `<div class="alert-row"><span class="sev ${a.severity}">${a.severity === "crit" ? "CRIT" : a.severity === "warn" ? "WARN" : "INFO"}</span>
+    <div class="t"><div>${esc(a.title)}</div><div class="when">ouverte ${rel(a.created_at)} · vue ${rel(a.last_seen_at)}</div></div>
+    ${a.resolved_at ? `<span class="pill">résolue ${rel(a.resolved_at)}</span>` : `<button class="btn sm ghost" onclick="resolveAlert(${a.id})">Résoudre</button>`}</div>`;
+}
+async function resolveAlert(id) {
+  await sb.from("alerts").update({ resolved_at: new Date().toISOString() }).eq("id", id);
+  refreshCurrent(true);
+}
+
+/* ───────── SEO ───────── */
+async function loadSeo() {
+  if (!state.sites.length) state.sites = await rpc("site_overview", { p_days: 28 });
+  const tracked = state.sites.filter((s) => s.tracked);
+  const sel = $("#seo-site");
+  sel.innerHTML = `<option value="">Tous les sites suivis</option>` + tracked.map((s) => `<option value="${s.site_id}">${esc(s.label || s.domain)}</option>`).join("");
+  sel.value = tracked.some((s) => s.site_id === state.seoSite) ? state.seoSite : "";
+  const site = sel.value || null;
+  const name = site ? (tracked.find((s) => s.site_id === site)?.domain) : "Tous les sites";
+  $("#seo-title").textContent = name;
+
+  const d = state.seoDays, to = daysAgo(1), from = daysAgo(d), pfrom = daysAgo(2 * d), pto = daysAgo(d + 1);
+  const [series, prev, queries, pages, movers, countries, devices, sources, gapages] = await Promise.all([
+    rpc("site_series", { p_site: site, p_from: from, p_to: to }),
+    rpc("site_series", { p_site: site, p_from: pfrom, p_to: pto }),
+    rpc("top_queries", { p_site: site, p_from: from, p_to: to, p_limit: 200 }),
+    rpc("top_pages", { p_site: site, p_from: from, p_to: to, p_limit: 200 }),
+    d <= 45 ? rpc("query_movers", { p_site: site, p_days: d, p_limit: 8 }) : Promise.resolve(null),
+    rpc("gsc_dims", { p_site: site, p_from: from, p_to: to, p_dim: "country", p_limit: 10 }),
+    rpc("gsc_dims", { p_site: site, p_from: from, p_to: to, p_dim: "device", p_limit: 5 }),
+    rpc("ga4_sources", { p_site: site, p_from: from, p_to: to, p_limit: 12 }),
+    rpc("ga4_pages", { p_site: site, p_from: from, p_to: to, p_limit: 30 }),
+  ]);
+  const sum = (arr, k) => arr.reduce((a, r) => a + Number(r[k] || 0), 0);
+  const wpos = (arr) => { const i = sum(arr, "impressions"); return i ? arr.reduce((a, r) => a + (r.avg_position || 0) * r.impressions, 0) / i : null; };
+  const c = sum(series, "clicks"), i = sum(series, "impressions"), pc = sum(prev, "clicks"), pi = sum(prev, "impressions");
+  $("#seo-sub").textContent = `${from} → ${to} · comparé à ${pfrom} → ${pto}`;
+  $("#seo-kpis").innerHTML = [
+    kpi("Clics", fmt(c), delta(c, pc)),
+    kpi("Impressions", fmt(i), delta(i, pi)),
+    kpi("CTR", fmtPct(i ? c / i : null), delta(i ? c / i : 0, pi ? pc / pi : 0)),
+    kpi("Position moy.", fmtPos(wpos(series)), delta(wpos(series) || 0, wpos(prev) || 0, true)),
+    kpi("Sessions GA4", fmt(sum(series, "sessions")), delta(sum(series, "sessions"), sum(prev, "sessions"))),
+    kpi("Sessions Pinterest", fmt(sum(series, "pinterest_sessions")), delta(sum(series, "pinterest_sessions"), sum(prev, "pinterest_sessions"))),
+  ].join("");
+
+  const labels = series.map((r) => r.date);
+  lineChart("seo-c-clicks", labels, [{ label: "Clics", data: series.map((r) => r.clicks), color: css("--series-1") }]);
+  lineChart("seo-c-impr", labels, [{ label: "Impressions", data: series.map((r) => r.impressions), color: css("--series-1") }]);
+  lineChart("seo-c-pos", labels, [{ label: "Position", data: series.map((r) => r.avg_position), color: css("--series-1") }], { pos: true });
+  lineChart("seo-c-sessions", labels, [
+    { label: "Toutes sources", data: series.map((r) => r.sessions), color: css("--series-1") },
+    { label: "Pinterest", data: series.map((r) => r.pinterest_sessions), color: css("--series-2") },
+  ]);
+
+  const gran = queries[0]?.granularity === "monthly" ? "agrégé par mois (historique)" : "jour par jour";
+  $("#seo-q-meta").textContent = queries.length ? `${queries.length} affichées · ${gran}` : "";
+  $("#seo-p-meta").textContent = pages.length ? `${pages.length} affichées · ${gran}` : "";
+  state.seoQueries = queries; state.seoPages = pages;
+  renderQ(); renderP();
+
+  $("#seo-m-meta").textContent = movers ? `${d} j vs ${d} j précédents` : "";
+  if (!movers) $("#seo-movers").innerHTML = empty("Période trop longue", "Disponible jusqu'à 28 jours (détail quotidien).");
+  else if (!movers.length) $("#seo-movers").innerHTML = empty("Pas encore de données", "");
+  else $("#seo-movers").innerHTML = `<table><thead><tr><th>Requête</th><th class="r">Clics</th><th class="r">Δ</th></tr></thead><tbody>${movers.map((m) =>
+    `<tr><td class="trunc" style="max-width:200px" title="${esc(m.query)}">${esc(m.query)}</td><td class="r num">${fmt(m.clicks_now)}</td><td class="r"><span class="delta ${m.delta > 0 ? "up" : "down"}">${m.delta > 0 ? "▲ +" : "▼ "}${fmt(m.delta)}</span></td></tr>`).join("")}</tbody></table>`;
+
+  const dimTable = (rows, labelFn) => rows.length ? `<table><thead><tr><th></th><th class="r">Clics</th><th class="r">Impr.</th><th class="r">Pos.</th></tr></thead><tbody>${rows.map((r) =>
+    `<tr><td>${esc(labelFn(r.value))}</td><td class="r num">${fmt(r.clicks)}</td><td class="r num">${fmt(r.impressions)}</td><td class="r num">${fmtPos(r.avg_position)}</td></tr>`).join("")}</tbody></table>` : empty("Pas encore de données", "");
+  const regions = new Intl.DisplayNames(["fr"], { type: "region" });
+  const iso3 = { deu: "DE", aut: "AT", che: "CH", fra: "FR", bel: "BE", mar: "MA", usa: "US", gbr: "GB", nld: "NL", ita: "IT", esp: "ES", pol: "PL", lux: "LU", can: "CA" };
+  $("#seo-countries").innerHTML = dimTable(countries, (v) => { const c2 = iso3[v]; try { return c2 ? regions.of(c2) : v.toUpperCase(); } catch (_) { return v; } });
+  $("#seo-devices").innerHTML = dimTable(devices, (v) => ({ MOBILE: "Mobile", DESKTOP: "Ordinateur", TABLET: "Tablette" }[v] || v));
+
+  $("#seo-sources").innerHTML = sources.length ? `<table><thead><tr><th>Source / support</th><th class="r">Sessions</th><th class="r">Utilisateurs</th></tr></thead><tbody>${sources.map((s) =>
+    `<tr><td>${/pinterest/i.test(s.source) ? '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--series-2);margin-right:6px"></i>' : ""}${esc(s.source)} <span class="muted">/ ${esc(s.medium)}</span></td><td class="r num">${fmt(s.sessions)}</td><td class="r num">${fmt(s.users)}</td></tr>`).join("")}</tbody></table>` : empty("Pas de données GA4", "Vérifie qu'une propriété GA4 est liée au site.");
+  $("#seo-gapages").innerHTML = gapages.length ? `<table><thead><tr><th>Page</th><th class="r">Vues</th><th class="r">Sessions</th></tr></thead><tbody>${gapages.map((p) =>
+    `<tr><td class="trunc" title="${esc(p.page)}">${esc(p.page)}</td><td class="r num">${fmt(p.views)}</td><td class="r num">${fmt(p.sessions)}</td></tr>`).join("")}</tbody></table>` : empty("Pas de données GA4", "");
+}
+$("#seo-site").addEventListener("change", (e) => { state.seoSite = e.target.value; loadSeo(); });
+$("#seo-q-filter").addEventListener("input", () => renderQ());
+$("#seo-p-filter").addEventListener("input", () => renderP());
+function gscTable(rows, key, filter) {
+  const f = (filter || "").toLowerCase();
+  const list = rows.filter((r) => !f || r[key].toLowerCase().includes(f)).slice(0, 100);
+  if (!rows.length) return empty("Pas encore de données", "Les données arrivent après l'import de l'historique.");
+  const max = Math.max(...list.map((r) => r.clicks), 1);
+  const shown = (v) => key === "page" ? v.replace(/^https?:\/\/[^/]+/, "") || "/" : v;
+  return `<table><thead><tr><th>${key === "page" ? "Page" : "Requête"}</th><th class="r">Clics</th><th class="r">Impr.</th><th class="r">CTR</th><th class="r">Pos.</th></tr></thead><tbody>${list.map((r) =>
+    `<tr><td class="trunc" title="${esc(r[key])}">${key === "page" ? `<a href="${esc(r[key])}" target="_blank" rel="noopener">${esc(shown(r[key]))}</a>` : esc(r[key])}</td>
+     <td class="r num bar-cell"><span class="b" style="width:${(r.clicks / max) * 100}%"></span><span>${fmt(r.clicks)}</span></td>
+     <td class="r num">${fmt(r.impressions)}</td><td class="r num">${fmtPct(r.ctr)}</td><td class="r num">${fmtPos(r.avg_position)}</td></tr>`).join("")}</tbody></table>`;
+}
+function renderQ() { $("#seo-queries").innerHTML = gscTable(state.seoQueries || [], "query", $("#seo-q-filter").value); }
+function renderP() { $("#seo-pages").innerHTML = gscTable(state.seoPages || [], "page", $("#seo-p-filter").value); }
+
+/* ───────── Ops ───────── */
+async function getStatus() {
+  if (state.status) return state.status;
+  try { state.status = await fn("ops-sync", { action: "status" }); } catch (e) { state.status = { error: e.message }; }
+  return state.status;
+}
+async function loadOps() {
+  const [st, wfs, alerts, resolved, checks, execs] = await Promise.all([
+    getStatus(),
+    rpc("workflow_health"),
+    sb.from("alerts").select("*").is("resolved_at", null).order("created_at", { ascending: false }).then((r) => r.data || []),
+    sb.from("alerts").select("*").not("resolved_at", "is", null).order("resolved_at", { ascending: false }).limit(5).then((r) => r.data || []),
+    sb.from("health_checks").select("*").order("name").then((r) => r.data || []),
+    sb.from("n8n_executions").select("*").order("started_at", { ascending: false }).limit(25).then((r) => r.data || []),
+  ]);
+  $("#ops-dot").hidden = !alerts.some((a) => a.severity === "crit");
+  $("#ops-config").innerHTML = st && !st.n8n ? `<div class="card" style="margin-bottom:14px"><div class="card-b">
+    <b>n8n n'est pas encore branché.</b> Ajoute les secrets <code class="copy">N8N_BASE_URL</code> et <code class="copy">N8N_API_KEY</code> dans Supabase (voir README). Les workflows apparaîtront à la synchro suivante.</div></div>` : "";
+
+  const watched = wfs.filter((w) => w.watch && w.active);
+  const failing = watched.filter((w) => ["error", "crashed"].includes(w.last_status));
+  const runs24 = watched.reduce((a, w) => a + Number(w.runs_24h), 0);
+  const err24 = watched.reduce((a, w) => a + Number(w.errors_24h), 0);
+  const running = wfs.reduce((a, w) => a + Number(w.running_now), 0);
+  const lastSync = wfs.length ? execs[0]?.synced_at : null;
+  $("#ops-sub").textContent = lastSync ? `Dernière synchro ${rel(lastSync)} · ${st?.n8n_url || ""}` : "Workflows, exécutions, santé des services, alertes";
+  $("#ops-kpis").innerHTML = [
+    kpi("Workflows surveillés", `${watched.length}`, `<span class="muted">${wfs.filter((w) => w.active).length} actifs au total</span>`),
+    kpi("En échec", `<span style="color:${failing.length ? "var(--crit)" : "inherit"}">${failing.length}</span>`, failing.length ? `<span class="muted">${esc(failing.map((w) => w.name).join(", ")).slice(0, 80)}</span>` : '<span class="status ok">Tout va bien</span>'),
+    kpi("Exécutions 24 h", fmt(runs24), `<span class="muted">${err24} échec${err24 > 1 ? "s" : ""} · ${runs24 ? fmtPct(1 - err24 / runs24) : "—"} de réussite</span>`),
+    kpi("En cours", fmt(running), ""),
+    kpi("Services", `${checks.filter((c) => c.last_ok).length}<span class="muted" style="font-size:16px"> / ${checks.length}</span>`, `<span class="muted">répondent</span>`),
+  ].join("");
+
+  $("#ops-alerts-meta").textContent = `${alerts.length} ouverte${alerts.length > 1 ? "s" : ""}`;
+  $("#ops-alerts").innerHTML = (alerts.length ? alerts.map(alertRow).join("") : '<div class="status ok">Aucune alerte ouverte</div>') +
+    (resolved.length ? `<div class="hint" style="margin:14px 0 6px">Résolues récemment</div>${resolved.map(alertRow).join("")}` : "");
+
+  if (!wfs.length) $("#ops-wf").innerHTML = empty("Aucun workflow synchronisé", st?.n8n ? "Clique « Synchroniser maintenant »." : "Branche n8n d'abord.");
+  else $("#ops-wf").innerHTML = `<table><thead><tr><th>État</th><th>Workflow</th><th>Dernière exéc.</th><th>Dernier succès</th><th class="r">Échecs 24 h</th><th class="r">7 j</th><th class="r">Durée moy.</th><th>Surveiller</th><th>Attendu (min)</th></tr></thead><tbody>${wfs.map((w) => {
+    const running = Number(w.running_now) > 0;
+    const cls = !w.active ? "" : running ? "run" : ["error", "crashed"].includes(w.last_status) ? "crit" : w.last_status === "success" ? "ok" : "";
+    const label = !w.active ? "Inactif" : running ? "En cours" : w.last_status === "success" ? "OK" : w.last_status ? w.last_status : "Pas d'exéc.";
+    return `<tr>
+      <td><span class="status ${cls}">${esc(label)}</span></td>
+      <td><b>${esc(w.name)}</b>${(w.tags || []).map((t) => ` <span class="pill">${esc(t)}</span>`).join("")}</td>
+      <td class="small">${rel(w.last_started)}</td>
+      <td class="small">${rel(w.last_success)}</td>
+      <td class="r num" style="${Number(w.errors_24h) ? "color:var(--crit);font-weight:600" : ""}">${w.errors_24h}<span class="muted"> / ${w.runs_24h}</span></td>
+      <td class="r num">${w.errors_7d}<span class="muted"> / ${w.runs_7d}</span></td>
+      <td class="r num">${dur(w.avg_duration_s)}</td>
+      <td><label class="toggle"><input type="checkbox" ${w.watch ? "checked" : ""} onchange="setWatch('${w.id}', this.checked)"><span></span></label></td>
+      <td><input type="number" min="0" step="5" value="${w.expected_every_min ?? ""}" placeholder="—" style="width:84px;height:28px" onchange="setExpected('${w.id}', this.value)"></td>
+    </tr>`; }).join("")}</tbody></table>`;
+
+  $("#ops-health").innerHTML = checks.length ? `<table><thead><tr><th>Service</th><th>État</th><th class="r">Temps</th><th>Vérifié</th><th></th></tr></thead><tbody>${checks.map((c) =>
+    `<tr><td><b>${esc(c.name)}</b><div class="muted small trunc" style="max-width:220px">${esc(c.url)}</div></td>
+     <td>${c.last_checked_at ? `<span class="status ${c.last_ok ? "ok" : "crit"}">${c.last_ok ? "OK" : (c.last_status ? `HTTP ${c.last_status}` : "Injoignable")}</span>` : '<span class="status">En attente</span>'}</td>
+     <td class="r num">${c.last_ms != null ? c.last_ms + " ms" : "—"}</td><td class="small">${rel(c.last_checked_at)}</td>
+     <td class="r"><button class="btn sm ghost danger" onclick="delCheck('${c.id}')">Retirer</button></td></tr>`).join("")}</tbody></table>`
+    : empty("Aucun service surveillé", "Ajoute ton pod RunPod (/health), le renderer VDS, n8n, tes blogs…");
+
+  const wfName = Object.fromEntries(wfs.map((w) => [w.id, w.name]));
+  $("#ops-exec").innerHTML = execs.length ? `<table><thead><tr><th>Workflow</th><th>Statut</th><th>Début</th><th class="r">Durée</th></tr></thead><tbody>${execs.map((e) => {
+    const cls = e.status === "success" ? "ok" : ["error", "crashed"].includes(e.status) ? "crit" : ["running", "waiting", "new"].includes(e.status) ? "run" : "";
+    const s = e.stopped_at && e.started_at ? (new Date(e.stopped_at) - new Date(e.started_at)) / 1000 : null;
+    return `<tr><td class="trunc" style="max-width:200px">${esc(wfName[e.workflow_id] || e.workflow_id)}</td><td><span class="status ${cls}">${esc(e.status)}</span></td><td class="small">${rel(e.started_at)}</td><td class="r num">${dur(s)}</td></tr>`; }).join("")}</tbody></table>`
+    : empty("Aucune exécution", "");
+
+  // Overview chart lives on the overview tab; nothing else here.
+}
+async function setWatch(id, v) { await sb.from("n8n_workflows").update({ watch: v }).eq("id", id); toast(v ? "Workflow surveillé" : "Surveillance coupée"); }
+async function setExpected(id, v) { await sb.from("n8n_workflows").update({ expected_every_min: v ? Number(v) : null }).eq("id", id); toast("Intervalle enregistré"); }
+async function delCheck(id) { await sb.from("health_checks").delete().eq("id", id); loadOps(); }
+$("#hc-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const { error } = await sb.from("health_checks").insert({ name: $("#hc-name").value.trim(), url: $("#hc-url").value.trim(), expect_status: Number($("#hc-status").value) || 200 });
+  if (error) return toast(error.message, true);
+  e.target.reset(); $("#hc-status").value = 200;
+  toast("Service ajouté · vérifié à la prochaine synchro");
+  loadOps();
+});
+$("#ops-sync-btn").addEventListener("click", async (e) => {
+  e.target.disabled = true; e.target.textContent = "Synchro…";
+  try {
+    const r = await fn("ops-sync", { action: "run" });
+    toast(r.n8n_error ? `n8n : ${r.n8n_error}` : `Synchro OK · ${r.n8n?.executions ?? 0} exécutions, ${r.health?.checked ?? 0} services`, !!r.n8n_error);
+  } catch (err) { toast(err.message, true); }
+  e.target.disabled = false; e.target.textContent = "Synchroniser maintenant";
+  loadOps();
+});
+
+/* ───────── Pipeline ───────── */
+async function loadPipeline() {
+  const { data } = await sb.from("settings").select("key,value").in("key", ["apps_script_url", "legacy_dashboard_url"]);
+  const s = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
+  const legacy = s.legacy_dashboard_url;
+  $("#pipe-card").innerHTML = `<div class="card-b">
+    ${legacy ? `<p>Le pipeline (WF1 → WF3b, coûts, planner Blotato) reste servi par ton dashboard v3 pendant la migration.</p>
+      <p><a class="btn primary" href="${esc(legacy)}" target="_blank" rel="noopener">Ouvrir le dashboard v3 ↗</a></p>
+      <iframe src="${esc(legacy)}" style="width:100%;height:75vh;border:1px solid var(--line);border-radius:8px;background:var(--surface)" loading="lazy"></iframe>`
+    : empty("Pipeline pas encore branché", `Renseigne l'URL de ton dashboard v3 et du web app Apps Script dans <a href="#" onclick="go('settings');return false">Connexions → Réglages</a>. Je brancherai les onglets Articles / Images / Pins / Coûts directement ici dès que j'ai le code API.gs.`)}
+  </div>`;
+}
+
+/* ───────── Settings ───────── */
+async function loadSettings() {
+  const [st, accounts, sites, gsc, ga4, progress, settings] = await Promise.all([
+    getStatus(),
+    sb.from("google_accounts").select("*").order("connected_at").then((r) => r.data || []),
+    sb.from("sites").select("*").order("domain").then((r) => r.data || []),
+    sb.from("gsc_sites").select("*").order("site_url").then((r) => r.data || []),
+    sb.from("ga4_properties").select("*").order("display_name").then((r) => r.data || []),
+    rpc("sync_progress"),
+    sb.from("settings").select("*").then((r) => r.data || []),
+  ]);
+
+  $("#st-accounts").innerHTML = accounts.length ? `<table><thead><tr><th>Compte</th><th>État</th><th>Sites GSC</th><th>Propriétés GA4</th><th>Dernière découverte</th><th></th></tr></thead><tbody>${accounts.map((a) =>
+    `<tr><td><b>${esc(a.email)}</b></td>
+     <td>${a.status === "active" ? '<span class="status ok">Actif</span>' : `<span class="status crit" title="${esc(a.last_error)}">À reconnecter</span>`}</td>
+     <td class="num">${gsc.filter((g) => g.account_id === a.id).length}</td>
+     <td class="num">${ga4.filter((g) => g.account_id === a.id).length}</td>
+     <td class="small">${rel(a.last_discovery_at)}</td>
+     <td class="r" style="white-space:nowrap"><button class="btn sm" onclick="rediscover('${a.id}')">Re-scanner</button> <button class="btn sm ghost danger" onclick="disconnect('${a.id}','${esc(a.email)}')">Déconnecter</button></td></tr>`).join("")}</tbody></table>`
+    : empty("Aucun compte Google connecté", st?.google ? "Clique « Connecter un compte Google » : tous les sites Search Console et propriétés GA4 de ce Gmail seront détectés." : "Ajoute d'abord GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans les secrets Supabase (voir README).");
+
+  const prog = Object.fromEntries(progress.map((p) => [p.site_id, p]));
+  const gscOpts = (cur) => `<option value="">—</option>` + gsc.map((g) => `<option value="${g.id}" ${g.id === cur ? "selected" : ""}>${esc(g.site_url)}</option>`).join("");
+  const gaOpts = (cur) => `<option value="">—</option>` + ga4.map((g) => `<option value="${g.id}" ${g.id === cur ? "selected" : ""}>${esc(g.display_name)} (${g.property_id})</option>`).join("");
+  $("#st-sites").innerHTML = sites.length ? `<table><thead><tr><th>Suivre</th><th>Domaine</th><th>Search Console</th><th>GA4</th><th>Import</th><th>Dernière synchro</th></tr></thead><tbody>${sites.map((s) => {
+    const p = prog[s.id]; const total = p ? Number(p.queued) + Number(p.running) + Number(p.done) + Number(p.failed) : 0;
+    const pct = total ? Math.round((Number(p.done) / total) * 100) : 0;
+    return `<tr>
+      <td><label class="toggle"><input type="checkbox" ${s.tracked ? "checked" : ""} onchange="setTracked('${s.id}', this.checked)"><span></span></label></td>
+      <td><b>${esc(s.domain)}</b></td>
+      <td><select style="max-width:240px;height:30px" onchange="setLink('${s.id}','gsc_site_id',this.value)">${gscOpts(s.gsc_site_id)}</select></td>
+      <td><select style="max-width:240px;height:30px" onchange="setLink('${s.id}','ga4_property_id',this.value)">${gaOpts(s.ga4_property_id)}</select></td>
+      <td>${p ? `<div style="display:flex;align-items:center;gap:8px"><div class="progress"><i style="width:${pct}%"></i></div><span class="small num">${pct} %</span>${Number(p.failed) ? `<span class="status crit" title="${esc(p.last_error)}">${p.failed}</span>` : ""}</div>` : '<span class="muted small">—</span>'}</td>
+      <td class="small">${s.last_sync_error ? `<span class="status crit" title="${esc(s.last_sync_error)}">Erreur</span>` : rel(s.last_sync_at)}</td>
+    </tr>`; }).join("")}</tbody></table>
+    <p class="hint">Les sites sont regroupés par domaine. Active « Suivre » puis lance « Importer l'historique » : le worker traite la file toutes les 2 min (≈ 1 à 3 h pour 13 sites × 16 mois).</p>`
+    : empty("Aucun site détecté", "Connecte un compte Google pour lister ses sites.");
+
+  $("#st-integrations").innerHTML = st?.error ? `<p class="status crit">${esc(st.error)}</p>` : `
+    <div class="kv">
+      <div>Google OAuth</div><div>${st.google ? '<span class="status ok">Configuré</span>' : '<span class="status crit">Secrets manquants</span>'}</div>
+      <div>URI de redirection</div><div><code class="copy" title="Copier" onclick="navigator.clipboard.writeText(this.textContent);toast('Copié')">${esc(st.google_redirect_uri)}</code></div>
+      <div>n8n</div><div>${st.n8n ? `<span class="status ok">${esc(st.n8n_url)}</span>` : '<span class="status warn">N8N_BASE_URL / N8N_API_KEY manquants</span>'}</div>
+      <div>Alertes Telegram</div><div>${st.telegram ? '<span class="status ok">Configuré</span> <button class="btn sm" onclick="testAlert()">Tester</button>' : '<span class="status warn">TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID manquants</span>'}</div>
+    </div>`;
+
+  const S = Object.fromEntries(settings.map((r) => [r.key, r.value]));
+  const fields = [
+    ["legacy_dashboard_url", "URL dashboard v3", "url"],
+    ["apps_script_url", "URL web app Apps Script", "url"],
+    ["gsc_daily_retention_days", "Détail requêtes/pages (jours)", "number"],
+    ["gsc_daily_top_n", "Requêtes / pages par jour", "number"],
+    ["monthly_top_n", "Requêtes / pages par mois", "number"],
+    ["backfill_months", "Historique à importer (mois)", "number"],
+    ["alert_stuck_minutes", "Alerte exécution bloquée (min)", "number"],
+  ];
+  $("#st-form").innerHTML = fields.map(([k, l, t]) => `<label for="set-${k}">${l}</label><input id="set-${k}" name="${k}" type="${t === "number" ? "number" : "url"}" value="${esc(S[k] ?? "")}" ${t === "url" ? 'placeholder="https://…"' : ""}>`).join("");
+}
+$("#st-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const rows = $$("#st-form input").map((i) => ({ key: i.name, value: i.type === "number" ? Number(i.value) : i.value.trim(), updated_at: new Date().toISOString() }));
+  const { error } = await sb.from("settings").upsert(rows);
+  toast(error ? error.message : "Réglages enregistrés", !!error);
+});
+$("#connect-google").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    const r = await fn("google-auth", { action: "start", return_to: location.origin + location.pathname });
+    location.href = r.url;
+  } catch (err) { toast(err.message, true); e.target.disabled = false; }
+});
+async function rediscover(id) {
+  toast("Scan en cours…");
+  try { const r = await fn("google-auth", { action: "discover", account_id: id }); const x = r.results[id]; toast(x.error ? x.error : `${x.gsc} sites GSC · ${x.ga4} propriétés GA4`, !!x.error); }
+  catch (e) { toast(e.message, true); }
+  state.sites = []; loadSettings();
+}
+async function disconnect(id, email) {
+  if (!confirm(`Déconnecter ${email} ? L'accès Google sera révoqué. Les données déjà importées restent.`)) return;
+  try { await fn("google-auth", { action: "disconnect", account_id: id }); toast("Compte déconnecté"); } catch (e) { toast(e.message, true); }
+  loadSettings();
+}
+async function setTracked(id, v) { await sb.from("sites").update({ tracked: v }).eq("id", id); state.sites = []; }
+async function setLink(id, col, v) { const { error } = await sb.from("sites").update({ [col]: v || null }).eq("id", id); toast(error ? error.message : "Liaison enregistrée", !!error); }
+$("#st-track-all").addEventListener("click", async () => {
+  await sb.from("sites").update({ tracked: true }).neq("domain", "");
+  state.sites = []; loadSettings(); toast("Tous les sites sont suivis");
+});
+$("#st-backfill").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try { const r = await fn("seo-sync", { action: "backfill" }); toast(`${r.queued} tâches en file pour ${r.sites} site(s)`); }
+  catch (err) { toast(err.message, true); }
+  e.target.disabled = false; loadSettings();
+});
+$("#st-work").addEventListener("click", async (e) => {
+  e.target.disabled = true; e.target.textContent = "Traitement… (≈ 2 min max)";
+  try { const r = await fn("seo-sync", { action: "work" }); toast(`${r.done} tâche(s) traitée(s)${r.failed ? `, ${r.failed} en erreur : ${r.errors[0]}` : ""}`, !!r.failed); }
+  catch (err) { toast(err.message, true); }
+  e.target.disabled = false; e.target.textContent = "Traiter la file maintenant"; state.sites = []; loadSettings();
+});
+async function testAlert() { try { await fn("ops-sync", { action: "test_alert" }); toast("Message Telegram envoyé"); } catch (e) { toast(e.message, true); } }
+
+boot();
+</script>
+</body>
+</html>

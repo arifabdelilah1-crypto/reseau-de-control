@@ -1,0 +1,14 @@
+revoke execute on function public.is_allowed() from public, anon;
+grant execute on function public.is_allowed() to authenticated, service_role;
+alter function public.setting_int(text, int) set search_path = public;
+alter function public.site_overview(int) set search_path = public;
+alter function public.site_series(uuid, date, date) set search_path = public;
+alter function public.top_queries(uuid, date, date, int) set search_path = public;
+alter function public.top_pages(uuid, date, date, int) set search_path = public;
+alter function public.query_movers(uuid, int, int) set search_path = public;
+alter function public.gsc_dims(uuid, date, date, text, int) set search_path = public;
+alter function public.ga4_sources(uuid, date, date, int) set search_path = public;
+alter function public.ga4_pages(uuid, date, date, int) set search_path = public;
+alter function public.sync_progress() set search_path = public;
+alter function public.workflow_health() set search_path = public;
+alter function public.n8n_daily(int) set search_path = public;
