@@ -242,10 +242,11 @@ code.copy { font-family: var(--mono); font-size: 12px; background: var(--surface
   <div class="card">
     <div class="brand"><span class="brand-mark"><i></i></span> Réseau DE · Control</div>
     <h1>Connexion</h1>
-    <p>Reçois un lien de connexion par email. Seuls les emails autorisés voient les données.</p>
+    <p>Email + mot de passe. Pas encore de mot de passe ? Laisse le champ vide pour recevoir un lien par email (max ~2 emails / heure).</p>
     <form id="login-form">
       <input type="email" id="login-email" placeholder="ton@email.com" required autocomplete="email">
-      <button class="btn primary" type="submit">Envoyer le lien</button>
+      <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password">
+      <button class="btn primary" type="submit" id="login-submit">Envoyer le lien</button>
     </form>
     <p id="login-msg" class="hint"></p>
   </div>
@@ -445,6 +446,17 @@ code.copy { font-family: var(--mono); font-size: 12px; background: var(--surface
           </div>
         </div>
       </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-h"><h2>Mon mot de passe</h2><span class="meta" id="pw-who"></span></div>
+        <div class="card-b">
+          <form id="pw-form" style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="password" id="pw-1" placeholder="Nouveau mot de passe (8+ caractères)" minlength="8" required autocomplete="new-password" style="flex:1 1 220px">
+            <input type="password" id="pw-2" placeholder="Confirmer" minlength="8" required autocomplete="new-password" style="flex:1 1 220px">
+            <button class="btn primary" type="submit">Définir le mot de passe</button>
+          </form>
+          <p class="hint">Ensuite tu te connectes sur n'importe quel navigateur avec email + mot de passe, sans attendre d'email.</p>
+        </div>
+      </div>
     </section>
   </main>
 </div>
@@ -627,9 +639,18 @@ function showLogin() { $("#app").hidden = true; $("#login").hidden = false; }
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = $("#login-email").value.trim();
+  const password = $("#login-password").value;
+  if (password) {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    $("#login-msg").textContent = error ? `Erreur : ${error.message === "Invalid login credentials" ? "email ou mot de passe incorrect" : error.message}` : "";
+    return;
+  }
   const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-  $("#login-msg").textContent = error ? `Erreur : ${error.message}` : `Lien envoyé à ${email}. Ouvre-le sur cet appareil.`;
+  $("#login-msg").textContent = error
+    ? (/rate limit/i.test(error.message) ? "Limite d'emails atteinte (≈ 2 / heure). Utilise ton mot de passe, ou réessaie dans une heure." : `Erreur : ${error.message}`)
+    : `Lien envoyé à ${email}. Ouvre-le sur cet appareil.`;
 });
+$("#login-password").addEventListener("input", (e) => { $("#login-submit").textContent = e.target.value ? "Se connecter" : "Envoyer le lien"; });
 $("#logout-btn").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
 sb.auth.onAuthStateChange((evt) => { if (evt === "SIGNED_IN" && $("#app").hidden) boot(); });
 
@@ -1059,6 +1080,15 @@ $("#st-work").addEventListener("click", async (e) => {
   catch (err) { toast(err.message, true); }
   e.target.disabled = false; e.target.textContent = "Traiter la file maintenant"; state.sites = []; loadSettings();
 });
+$("#pw-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if ($("#pw-1").value !== $("#pw-2").value) return toast("Les deux mots de passe ne correspondent pas", true);
+  const { error } = await sb.auth.updateUser({ password: $("#pw-1").value });
+  if (error) return toast(error.message, true);
+  e.target.reset();
+  toast("Mot de passe défini · utilise-le pour te connecter partout");
+});
+sb.auth.getUser().then(({ data }) => { if (data?.user) $("#pw-who").textContent = data.user.email; });
 async function testAlert() { try { await fn("ops-sync", { action: "test_alert" }); toast("Message Telegram envoyé"); } catch (e) { toast(e.message, true); } }
 
 boot();
