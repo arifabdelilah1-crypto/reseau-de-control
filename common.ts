@@ -90,8 +90,26 @@ export async function upsertChunks(table: string, rows: Record<string, unknown>[
 }
 
 // ───────────── Google ─────────────
-export const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
-export const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
+// Secrets pasted in the dashboard often carry spaces, newlines or quotes: clean them.
+export function cleanSecret(v: string | undefined): string {
+  return (v || "").replace(/[\s​-‍﻿]+/g, "").replace(/^["'`]+|["'`]+$/g, "");
+}
+export const GOOGLE_CLIENT_ID = cleanSecret(Deno.env.get("GOOGLE_CLIENT_ID"));
+export const GOOGLE_CLIENT_SECRET = cleanSecret(Deno.env.get("GOOGLE_CLIENT_SECRET"));
+export function googleDiag() {
+  const raw = Deno.env.get("GOOGLE_CLIENT_ID") || "";
+  const rawS = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
+  return {
+    client_id: GOOGLE_CLIENT_ID,                     // public value (it is in every Google auth URL)
+    client_id_raw_length: raw.length,
+    client_id_clean_length: GOOGLE_CLIENT_ID.length,
+    client_id_looks_valid: /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(GOOGLE_CLIENT_ID),
+    secret_present: !!GOOGLE_CLIENT_SECRET,
+    secret_starts_gocspx: GOOGLE_CLIENT_SECRET.startsWith("GOCSPX-"),
+    secret_raw_length: rawS.length,
+    secret_clean_length: GOOGLE_CLIENT_SECRET.length,
+  };
+}
 export const GOOGLE_REDIRECT_URI = `${SUPABASE_URL}/functions/v1/google-auth`;
 
 export class GoogleAuthDead extends Error {}
@@ -178,8 +196,8 @@ export async function resolveAlert(fingerprint: string) {
     .eq("fingerprint", fingerprint).is("resolved_at", null);
 }
 
-const TG_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
-const TG_CHAT = Deno.env.get("TELEGRAM_CHAT_ID") || "";
+const TG_TOKEN = cleanSecret(Deno.env.get("TELEGRAM_BOT_TOKEN"));
+const TG_CHAT = cleanSecret(Deno.env.get("TELEGRAM_CHAT_ID"));
 export const telegramConfigured = !!(TG_TOKEN && TG_CHAT);
 
 export async function telegram(text: string): Promise<boolean> {

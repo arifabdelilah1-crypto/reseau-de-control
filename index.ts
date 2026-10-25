@@ -1,216 +1,144 @@
-// ops-sync — n8n executions + health checks + alerts + Telegram.
-//   POST {action:"run"}          (cron every 5 min / user)  sync n8n, ping health checks, evaluate alerts, notify
-//   POST {action:"status"}       (user)  which integrations are configured
-//   POST {action:"test_alert"}   (user)  send a Telegram test message
+// pipeline — pont entre le dashboard v4 et le web app Apps Script (API.gs + Dashboard.gs).
+//   POST {action:"refresh"}                        (cron 15 min / user) lit « dash », stocke l'état, alertes
+//   POST {action:"call", gas:"<action>", params}   (user) relaie une action autorisée vers Apps Script
+// Secrets : APPS_SCRIPT_USER, APPS_SCRIPT_PASS · réglage : settings.apps_script_url
 import {
-  admin, serve, json, requireUser, requireUserOrCron, HttpError, getSetting, upsertChunks,
-  raiseAlert, resolveAlert, telegram, telegramConfigured, esc,
-  GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI,
+  admin, serve, json, requireUserOrCron, HttpError, getSetting, cleanSecret, raiseAlert, resolveAlert,
 } from "../_shared/common.ts";
 
-const N8N_URL = (Deno.env.get("N8N_BASE_URL") || "").replace(/\/+$/, "");
-const N8N_KEY = Deno.env.get("N8N_API_KEY") || "";
-const n8nConfigured = !!(N8N_URL && N8N_KEY);
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+const GAS_USER = cleanSecret(Deno.env.get("APPS_SCRIPT_USER"));
+const GAS_PASS = Deno.env.get("APPS_SCRIPT_PASS")?.trim() || "";
+
+// Actions Apps Script relayées depuis le dashboard (lecture + pilotage du pipeline)
+const ALLOWED = new Set([
+  "dash", "failed", "wf1_diagnostic", "no_pins",
+  "wf1_run", "wf1_retry_failed", "wf2_run", "wf2b_run", "wf2_retry_failed", "wf3_run", "reset_failed",
+  "set_costs", "plan_pins", "unplan_pins", "send_planned", "auto_on", "auto_off", "auto_status",
+  "test_pod", "save_pod",
+]);
+// Actions qui changent le sheet : on rafraîchit l'état juste après
+const MUTATING = new Set([
+  "wf1_retry_failed", "wf2_retry_failed", "reset_failed", "set_costs", "plan_pins", "unplan_pins",
+  "send_planned", "save_pod",
+]);
 
 serve(async (req) => {
-  const body = await req.clone().json().catch(() => ({}));
-  const action = body.action || "run";
+  const who = await requireUserOrCron(req);
+  const body = await req.json().catch(() => ({}));
+  const action = body.action || "refresh";
 
-  if (action === "status") {
-    await requireUser(req);
-    return json({
-      google: !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
-      google_redirect_uri: GOOGLE_REDIRECT_URI,
-      n8n: n8nConfigured,
-      n8n_url: N8N_URL || null,
-      telegram: telegramConfigured,
-    });
-  }
-  if (action === "test_alert") {
-    await requireUser(req);
-    if (!telegramConfigured) throw new HttpError(400, "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID non configurés.");
-    const ok = await telegram("✅ <b>Réseau DE · Control</b>\nTest d'alerte OK.");
-    return json({ ok });
-  }
-  if (action === "run") {
-    const who = await requireUserOrCron(req);
-    const out: Record<string, unknown> = { who };
-    if (n8nConfigured) {
-      try { out.n8n = await syncN8n(); } catch (e) {
-        out.n8n_error = (e as Error).message;
-        await raiseAlert({ fingerprint: "n8n_api", kind: "n8n_api", severity: "crit",
-          title: "API n8n injoignable", details: { error: out.n8n_error } });
-      }
+  if (action === "refresh") return json(await refresh());
+
+  if (action === "call") {
+    if (who !== "user") throw new HttpError(403, "user only");
+    const gas = String(body.gas || "");
+    if (!ALLOWED.has(gas)) throw new HttpError(400, `Action non autorisée : ${gas}`);
+    const params = body.params || {};
+    const res = await callGas(gas, params);
+    const isWrite = MUTATING.has(gas) && !(gas === "plan_pins" && String(params.dry) !== "0");
+    if (isWrite) {
+      const p = refresh().catch((e) => console.error("refresh after call", e));
+      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(p);
     }
-    out.health = await runHealthChecks();
-    out.alerts = await evaluateWorkflowAlerts();
-    out.notified = await notifyPending();
-    return json(out);
+    return json(res);
   }
   throw new HttpError(400, "Unknown action");
 });
 
-// ───────────── n8n ─────────────
-async function n8n<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${N8N_URL}/api/v1${path}`, {
-    headers: { "X-N8N-API-KEY": N8N_KEY, Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
+async function callGas(action: string, params: Record<string, unknown>, timeoutMs = 140_000) {
+  const url = String(await getSetting("apps_script_url", "") || "").trim();
+  if (!url) throw new HttpError(400, "URL du web app Apps Script manquante (Connexions → Réglages).");
+  if (!GAS_USER || !GAS_PASS) throw new HttpError(400, "Secrets APPS_SCRIPT_USER / APPS_SCRIPT_PASS manquants dans Supabase.");
+
+  // API.gs fait JSON.parse() sur sites / weeks / ids : on envoie toujours des chaînes.
+  const payload: Record<string, string> = { u: GAS_USER, p: GAS_PASS, action };
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null) continue;
+    payload[k] = typeof v === "string" ? v : (typeof v === "object" ? JSON.stringify(v) : String(v));
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+    redirect: "follow",
+    signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`n8n ${path.split("?")[0]} → ${res.status} ${(await res.text()).slice(0, 200)}`);
-  return await res.json() as T;
-}
-
-async function syncN8n() {
-  // Workflows
-  const wfRows: Record<string, unknown>[] = [];
-  let cursor = "";
-  do {
-    const r = await n8n<any>(`/workflows?limit=250${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-    for (const w of r.data || []) {
-      wfRows.push({
-        id: w.id, name: w.name, active: !!w.active,
-        tags: (w.tags || []).map((t: any) => t.name), updated_at: w.updatedAt, synced_at: new Date().toISOString(),
-      });
+  const text = await res.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch (_) {
+    if (/<html|accounts\.google\.com/i.test(text)) {
+      throw new Error("Apps Script a renvoyé une page HTML : vérifie que le web app est déployé en accès « Anyone » et que l'URL se termine par /exec.");
     }
-    cursor = r.nextCursor || "";
-  } while (cursor);
-  // upsert without touching watch / expected_every_min
-  await upsertChunks("n8n_workflows", wfRows, "id");
-  await resolveAlert("n8n_api");
-
-  // Executions: page back until we pass the last synced start (minus 3 h), max 7 days on first run
-  const { data: last } = await admin.from("n8n_executions").select("started_at")
-    .order("started_at", { ascending: false }).limit(1).maybeSingle();
-  const floor = last?.started_at
-    ? new Date(new Date(last.started_at).getTime() - 3 * 3600_000)
-    : new Date(Date.now() - 7 * 86400_000);
-
-  const exRows: Record<string, unknown>[] = [];
-  cursor = "";
-  let pages = 0;
-  outer: do {
-    const r = await n8n<any>(`/executions?limit=250&includeData=false${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-    for (const e of r.data || []) {
-      const started = e.startedAt ? new Date(e.startedAt) : null;
-      if (started && started < floor) break outer;
-      exRows.push(execRow(e));
-    }
-    cursor = r.nextCursor || "";
-    pages++;
-  } while (cursor && pages < 20);
-
-  // Re-check executions we still think are running (they may be older than the window)
-  const { data: running } = await admin.from("n8n_executions").select("id").in("status", ["running", "waiting", "new"]);
-  for (const r of running || []) {
-    if (exRows.some((x) => x.id === r.id)) continue;
-    try { exRows.push(execRow(await n8n<any>(`/executions/${r.id}?includeData=false`))); }
-    catch (_) { await admin.from("n8n_executions").update({ status: "unknown" }).eq("id", r.id); }
+    throw new Error(`Réponse Apps Script illisible (HTTP ${res.status}) : ${text.slice(0, 160)}`);
   }
-
-  await upsertChunks("n8n_executions", exRows, "id");
-  return { workflows: wfRows.length, executions: exRows.length };
-}
-
-function execRow(e: any) {
-  const status = e.status || (e.finished ? "success" : e.stoppedAt ? "error" : "running");
-  return {
-    id: String(e.id), workflow_id: String(e.workflowId), status, mode: e.mode,
-    started_at: e.startedAt, stopped_at: e.stoppedAt || null, synced_at: new Date().toISOString(),
-  };
-}
-
-// ───────────── Health checks ─────────────
-async function runHealthChecks() {
-  const { data: checks } = await admin.from("health_checks").select("*").eq("enabled", true);
-  let down = 0;
-  for (const c of checks || []) {
-    const t0 = Date.now();
-    let status = 0, err: string | null = null;
-    try {
-      const res = await fetch(c.url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(12_000) });
-      status = res.status;
-      await res.body?.cancel();
-    } catch (e) { err = (e as Error).message.slice(0, 200); }
-    const ok = !err && status === c.expect_status;
-    await admin.from("health_checks").update({
-      last_status: status || null, last_ok: ok, last_ms: Date.now() - t0,
-      last_checked_at: new Date().toISOString(), last_error: err,
-    }).eq("id", c.id);
-    const fp = `health:${c.id}`;
-    if (ok) await resolveAlert(fp);
-    else {
-      down++;
-      await raiseAlert({ fingerprint: fp, kind: "health_down", severity: "crit",
-        title: `${c.name} ne répond pas (${err ? "timeout/erreur" : `HTTP ${status}`})`,
-        details: { url: c.url, status, error: err } });
-    }
+  if (data && data.ok === false && data.error === "Unauthorized") {
+    throw new Error("Apps Script refuse les identifiants : vérifie APPS_SCRIPT_USER / APPS_SCRIPT_PASS.");
   }
-  return { checked: checks?.length || 0, down };
+  return data;
 }
 
-// ───────────── Workflow alerts ─────────────
-async function evaluateWorkflowAlerts() {
-  const stuckMin = Number(await getSetting("alert_stuck_minutes", 90));
-  const { data: wfs } = await admin.rpc("workflow_health");
+async function refresh() {
+  const t0 = Date.now();
+  try {
+    const data = await callGas("dash", {});
+    if (!data || data.ok === false) throw new Error(data?.error || "réponse dash invalide");
+    const ms = Date.now() - t0;
+    await admin.from("pipeline_state").upsert({ id: 1, data, ok: true, error: null, ms, taken_at: new Date().toISOString() });
+    await resolveAlert("pipeline_api");
+    await history(data);
+    const alerts = await pipelineAlerts(data);
+    return { ok: true, ms, alerts };
+  } catch (e) {
+    const msg = (e as Error).message.slice(0, 400);
+    await admin.from("pipeline_state").upsert({ id: 1, ok: false, error: msg, ms: Date.now() - t0, taken_at: new Date().toISOString() },
+      { onConflict: "id", ignoreDuplicates: false });
+    await raiseAlert({ fingerprint: "pipeline_api", kind: "pipeline_api", severity: "crit",
+      title: "Pipeline : Apps Script injoignable", details: { error: msg } });
+    return { ok: false, error: msg };
+  }
+}
+
+// Une ligne de métriques par heure (courbes long terme)
+async function history(d: any) {
+  const { data: last } = await admin.from("pipeline_history").select("taken_at").order("taken_at", { ascending: false }).limit(1).maybeSingle();
+  if (last && Date.now() - new Date(last.taken_at).getTime() < 55 * 60_000) return;
+  await admin.from("pipeline_history").insert({
+    metrics: {
+      articles: { total: d.articles?.total, generated: d.articles?.generated, published: d.articles?.published, failed: d.articles?.failed },
+      images: { images: d.images?.images, articlesDone: d.images?.articlesDone },
+      pins: d.pins?.byStatus || {},
+      cost: { total: d.cost?.total, month: d.cost?.month, perPublished: d.cost?.perPublished },
+    },
+  });
+}
+
+async function pipelineAlerts(d: any) {
   let open = 0;
-  for (const w of (wfs || []) as any[]) {
-    const errFp = `wf_error:${w.id}`, staleFp = `wf_stale:${w.id}`, stuckFp = `wf_stuck:${w.id}`;
-    if (!w.watch || !w.active) {
-      await resolveAlert(errFp); await resolveAlert(staleFp); await resolveAlert(stuckFp);
-      continue;
-    }
-    // last run failed
-    if (w.last_status === "error" || w.last_status === "crashed") {
+  // 1. Échecs accumulés
+  const threshold = Number(await getSetting("pipeline_failed_alert", 10));
+  const fa = Number(d.articles?.failed || 0);
+  const fi = (d.images?.failedList || []).filter((x: any) => String(x.status).startsWith("failed")).length;
+  if (fa + fi >= threshold) {
+    open++;
+    await raiseAlert({ fingerprint: "pipeline_failed", kind: "pipeline_failed", severity: "warn",
+      title: `Pipeline : ${fa} article(s) et ${fi} image(s) en échec`, details: { articles: fa, images: fi } });
+  } else await resolveAlert("pipeline_failed");
+
+  // 2. Sites avec des pins prêts mais rien de planifié dans les prochaines heures
+  const gapH = Number(await getSetting("pipeline_pin_gap_hours", 48));
+  const nDays = Math.max(1, Math.ceil(gapH / 24));
+  const days: string[] = (d.nextDays || []).slice(0, nDays);
+  for (const s of d.pins?.bySite || []) {
+    const fp = `pin_gap:${s.site}`;
+    const waiting = Number(s.done || 0);
+    const upcoming = days.reduce((n, day) => n + Number(d.pins?.cal?.[s.site]?.[day] || 0), 0);
+    if (waiting > 0 && upcoming === 0) {
       open++;
-      await raiseAlert({ fingerprint: errFp, kind: "wf_error", severity: "crit",
-        title: `${w.name} : dernière exécution en échec (${w.errors_24h} erreur(s) / 24 h)`,
-        details: { workflow_id: w.id, last_started: w.last_started, errors_24h: w.errors_24h } });
-    } else if (w.last_status === "success") await resolveAlert(errFp);
-
-    // stuck run
-    if (w.running_since && Date.now() - new Date(w.running_since).getTime() > stuckMin * 60_000) {
-      open++;
-      await raiseAlert({ fingerprint: stuckFp, kind: "wf_stuck", severity: "warn",
-        title: `${w.name} tourne depuis plus de ${stuckMin} min`,
-        details: { workflow_id: w.id, running_since: w.running_since } });
-    } else await resolveAlert(stuckFp);
-
-    // no success for too long
-    if (w.expected_every_min) {
-      const lastOk = w.last_success ? new Date(w.last_success).getTime() : 0;
-      if (Date.now() - lastOk > 2 * w.expected_every_min * 60_000) {
-        open++;
-        await raiseAlert({ fingerprint: staleFp, kind: "wf_stale", severity: "warn",
-          title: `${w.name} : aucun succès depuis ${w.last_success ? new Date(w.last_success).toLocaleString("fr-FR", { timeZone: "Africa/Casablanca" }) : "jamais"}`,
-          details: { workflow_id: w.id, expected_every_min: w.expected_every_min } });
-      } else await resolveAlert(staleFp);
-    } else await resolveAlert(staleFp);
+      await raiseAlert({ fingerprint: fp, kind: "pin_gap", severity: "warn",
+        title: `${s.site} : aucun pin planifié sous ${gapH} h (${waiting} prêts)`, details: { site: s.site, waiting } });
+    } else await resolveAlert(fp);
   }
-  return { open };
-}
-
-// ───────────── Notifications ─────────────
-async function notifyPending() {
-  if (!telegramConfigured) return 0;
-  let sent = 0;
-  const { data: fresh } = await admin.from("alerts").select("*").is("resolved_at", null).is("notified_at", null).limit(20);
-  for (const a of fresh || []) {
-    const icon = a.severity === "crit" ? "🔴" : a.severity === "warn" ? "🟠" : "🔵";
-    if (await telegram(`${icon} <b>${esc(a.title)}</b>`)) {
-      await admin.from("alerts").update({ notified_at: new Date().toISOString() }).eq("id", a.id);
-      sent++;
-    }
-  }
-  // tell when a notified alert is resolved (once)
-  const since = new Date(Date.now() - 10 * 60_000).toISOString();
-  const { data: solved } = await admin.from("alerts").select("*")
-    .not("notified_at", "is", null).not("resolved_at", "is", null).gte("resolved_at", since);
-  for (const a of solved || []) {
-    if (a.details?.resolved_notified) continue;
-    if (await telegram(`✅ Résolu : ${esc(a.title)}`)) {
-      await admin.from("alerts").update({ details: { ...a.details, resolved_notified: true } }).eq("id", a.id);
-      sent++;
-    }
-  }
-  return sent;
+  return open;
 }

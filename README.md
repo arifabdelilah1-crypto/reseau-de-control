@@ -17,13 +17,13 @@ Déjà fait côté Supabase : projet, schéma, RLS, fonctions, cron. Il reste **
 
 ---
 
-## 1. Google Cloud (client OAuth « gogle auth »)
+## 1. Google Cloud (client OAuth Web)
 
-1. **APIs & Services → Credentials → client « gogle auth »**
+1. **APIs & Services → Credentials → ton client OAuth Web**
    - **Reset secret** (l'ancien a été collé dans le chat).
    - **Authorized redirect URIs** → ajouter exactement :
      `https://kuhxuovjlukxdzjnsyzt.supabase.co/functions/v1/google-auth`
-2. Supprime les 4 autres clients (GSC, GA4, GA admin, GAData) : un seul client suffit.
+2. Un seul client OAuth suffit pour GSC + GA4 ; l'ID et le secret doivent venir du **même** client.
 3. **APIs & Services → Library** : activer **Google Search Console API**, **Google Analytics Admin API**, **Google Analytics Data API**.
 4. **OAuth consent screen**
    - Scopes : `openid`, `email`, `.../auth/webmasters.readonly`, `.../auth/analytics.readonly`
@@ -37,7 +37,7 @@ Dashboard → **Edge Functions → Secrets** :
 
 | Nom | Valeur |
 |---|---|
-| `GOOGLE_CLIENT_ID` | ID du client « gogle auth » (`918038722999-51ct…apps.googleusercontent.com`) |
+| `GOOGLE_CLIENT_ID` | ID du client OAuth Web actif (`918038722999-uthn16e1…apps.googleusercontent.com`) |
 | `GOOGLE_CLIENT_SECRET` | le **nouveau** secret après reset |
 | `N8N_BASE_URL` | URL de ton n8n, ex. `https://n8n.tondomaine.com` (sans `/api`) |
 | `N8N_API_KEY` | n8n → Settings → **n8n API** → *Create an API key* |
@@ -84,6 +84,16 @@ insert into allowed_users(email) values ('autre@email.com');
 - Mets un **Attendu (min)** sur les workflows planifiés (ex. WF3b = 120) → alerte si aucun succès depuis 2× ce délai.
 - **Santé des services** : ajoute le `/health` du pod RunPod, le renderer VDS (`:8110`), ton n8n, tes blogs.
 
+## 7. Pipeline (Google Sheet via Apps Script)
+
+L'onglet **Pipeline** remplace le dashboard v3 : synthèse, articles (WF1), images (WF2a/2b + pod), Pinterest (WF3a + calendrier), planificateur Blotato, coûts, échecs. Rien ne change dans Apps Script ni dans n8n.
+
+1. **Connexions → Réglages → URL web app Apps Script** : l'URL de déploiement qui finit par `/exec`.
+2. Secrets Supabase : `APPS_SCRIPT_USER` et `APPS_SCRIPT_PASS` = un couple de `API_USERS` dans `API.gs`.
+3. **Pipeline → Actualiser depuis le Sheet**. Ensuite, Supabase relit le Sheet toutes les 15 min.
+
+Alertes ajoutées : Apps Script injoignable · échecs articles + images ≥ seuil · site avec des pins prêts mais rien de planifié sous 48 h.
+
 ---
 
 ## Données & limites (free plan Supabase, 500 Mo)
@@ -119,12 +129,14 @@ Chaque nouvelle alerte part sur Telegram une seule fois, plus un message ✅ à 
 ## Fichiers
 
 ```
+MASTER_PROMPT.md                 brief complet pour redessiner le front (contrat de données inclus)
 index.html                       front (GitHub Pages)
-supabase/migrations/001…004.sql  schéma, fonctions de lecture, file + cron, durcissement
+supabase/migrations/001…005.sql  schéma, fonctions de lecture, file + cron, durcissement, pipeline
 supabase/functions/_shared       helpers communs
 supabase/functions/google-auth   OAuth + découverte des sites
 supabase/functions/seo-sync      import GSC / GA4
 supabase/functions/ops-sync      n8n, santé, alertes, Telegram
+supabase/functions/pipeline      pont Apps Script (état du Sheet toutes les 15 min + actions)
 ```
 
 Redéployer une fonction avec la CLI : `supabase functions deploy seo-sync --no-verify-jwt --project-ref kuhxuovjlukxdzjnsyzt`
