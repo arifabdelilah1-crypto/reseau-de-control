@@ -26,6 +26,7 @@
   --accent-text: #8a6200;
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --series-3: #1baf7a;
   --good: #0ca30c;
   --warn: #fab219;
   --serious: #ec835a;
@@ -50,6 +51,7 @@
     --accent-text: #f2c230;
     --series-1: #3987e5;
     --series-2: #d95926;
+    --series-3: #199e70;
     --grid: rgba(240, 239, 236, .07);
     --shadow: none;
   }
@@ -67,6 +69,7 @@
   --accent-text: #f2c230;
   --series-1: #3987e5;
   --series-2: #d95926;
+  --series-3: #199e70;
   --grid: rgba(240, 239, 236, .07);
   --shadow: none;
 }
@@ -402,10 +405,17 @@ code.copy { font-family: var(--mono); font-size: 12px; background: var(--surface
       <div class="view-head">
         <div>
           <h1>Pipeline</h1>
-          <p>Articles → images → pins (Google Sheet via Apps Script)</p>
+          <p id="pipe-sub">Articles → images → pins · Google Sheet via Apps Script</p>
+        </div>
+        <div class="controls">
+          <button class="btn" id="pipe-refresh">Actualiser depuis le Sheet</button>
         </div>
       </div>
-      <div class="card" id="pipe-card"></div>
+      <div id="pipe-banner"></div>
+      <div class="seg" id="pipe-tabs" style="margin-bottom:14px;flex-wrap:wrap">
+        <button data-t="synth" aria-pressed="true">Synthèse</button><button data-t="articles">Articles</button><button data-t="images">Images</button><button data-t="pins">Pinterest</button><button data-t="planner">Planificateur</button><button data-t="costs">Coûts</button><button data-t="fails">Échecs</button>
+      </div>
+      <div id="pipe-body"></div>
     </section>
 
     <!-- Settings -->
@@ -968,16 +978,327 @@ $("#ops-sync-btn").addEventListener("click", async (e) => {
 });
 
 /* ───────── Pipeline ───────── */
+const pipe = { tab: "synth", data: null, meta: null, sel: new Set(), preview: null };
+$("#pipe-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  $$("#pipe-tabs button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  pipe.tab = b.dataset.t; renderPipe();
+});
+$("#pipe-refresh").addEventListener("click", async (e) => {
+  const b = e.target; b.disabled = true; b.textContent = "Lecture du Sheet…";
+  try { const r = await fn("pipeline", { action: "refresh" }); toast(r.ok ? `Sheet lu en ${Math.round(r.ms / 1000)} s` : r.error, !r.ok); }
+  catch (err) { toast(err.message, true); }
+  b.disabled = false; b.textContent = "Actualiser depuis le Sheet";
+  loadPipeline();
+});
+async function gas(action, params = {}) { return fn("pipeline", { action: "call", gas: action, params }); }
+async function act(btn, action, params, { confirmText, done } = {}) {
+  if (confirmText && !confirm(confirmText)) return null;
+  const label = btn?.textContent; if (btn) { btn.disabled = true; btn.textContent = "…"; }
+  let r = null;
+  try {
+    r = await gas(action, params);
+    const bad = r && r.ok === false;
+    toast(done ? done(r) : bad ? (r.error || `Échec (HTTP ${r.code})`) : (r.message || "OK"), bad);
+  } catch (err) { toast(err.message, true); }
+  if (btn) { btn.disabled = false; btn.textContent = label; }
+  return r;
+}
 async function loadPipeline() {
-  const { data } = await sb.from("settings").select("key,value").in("key", ["apps_script_url", "legacy_dashboard_url"]);
-  const s = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
-  const legacy = s.legacy_dashboard_url;
-  $("#pipe-card").innerHTML = `<div class="card-b">
-    ${legacy ? `<p>Le pipeline (WF1 → WF3b, coûts, planner Blotato) reste servi par ton dashboard v3 pendant la migration.</p>
-      <p><a class="btn primary" href="${esc(legacy)}" target="_blank" rel="noopener">Ouvrir le dashboard v3 ↗</a></p>
-      <iframe src="${esc(legacy)}" style="width:100%;height:75vh;border:1px solid var(--line);border-radius:8px;background:var(--surface)" loading="lazy"></iframe>`
-    : empty("Pipeline pas encore branché", `Renseigne l'URL de ton dashboard v3 et du web app Apps Script dans <a href="#" onclick="go('settings');return false">Connexions → Réglages</a>. Je brancherai les onglets Articles / Images / Pins / Coûts directement ici dès que j'ai le code API.gs.`)}
+  const { data: row } = await sb.from("pipeline_state").select("*").eq("id", 1).maybeSingle();
+  pipe.meta = row; pipe.data = row?.data || null;
+  const d = pipe.data;
+  $("#pipe-sub").textContent = row?.taken_at
+    ? `Sheet lu ${rel(row.taken_at)}${row.ms ? ` · ${Math.round(row.ms / 1000)} s` : ""} · actualisé toutes les 15 min`
+    : "Articles → images → pins · Google Sheet via Apps Script";
+  let banner = "";
+  if (!row) banner = `<div class="card" style="margin-bottom:14px"><div class="card-b"><b>Pipeline pas encore synchronisé.</b>
+    <ol class="small" style="margin:8px 0 0;padding-left:18px">
+      <li>Colle l'URL du web app Apps Script (finit par <code>/exec</code>) dans <a href="#" onclick="go('settings');return false">Connexions → Réglages</a>.</li>
+      <li>Ajoute les secrets Supabase <code class="copy">APPS_SCRIPT_USER</code> et <code class="copy">APPS_SCRIPT_PASS</code> (un utilisateur de API_USERS).</li>
+      <li>Clique « Actualiser depuis le Sheet ».</li></ol></div></div>`;
+  else if (!row.ok) banner = `<div class="card" style="margin-bottom:14px;border-color:var(--crit)"><div class="card-b"><span class="status crit">Dernière lecture en échec</span> <span class="small">${esc(row.error || "")}</span>${d ? `<div class="hint">Affichage de la dernière lecture réussie.</div>` : ""}</div></div>`;
+  $("#pipe-banner").innerHTML = banner;
+  renderPipe();
+}
+function siteNames() {
+  const d = pipe.data; if (!d) return [];
+  return (d.articles?.bySite || []).map((s) => s.site).filter((s) => s && s !== "—").sort();
+}
+function chips(id) {
+  const names = siteNames();
+  return `<div class="chips" id="${id}" style="display:flex;flex-wrap:wrap;gap:6px">
+    <button type="button" class="pill" data-all style="cursor:pointer;border:1px solid var(--line-strong);${pipe.sel.size ? "" : "background:var(--ink);color:var(--surface)"}">Tous les sites</button>
+    ${names.map((n) => `<button type="button" class="pill" data-s="${esc(n)}" style="cursor:pointer;border:1px solid var(--line-strong);${pipe.sel.has(n) ? "background:var(--ink);color:var(--surface)" : ""}">${esc(n)}</button>`).join("")}
   </div>`;
+}
+function bindChips(id) {
+  $(`#${id}`)?.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.hasAttribute("data-all")) pipe.sel.clear();
+    else { const n = b.dataset.s; pipe.sel.has(n) ? pipe.sel.delete(n) : pipe.sel.add(n); }
+    renderPipe();
+  });
+}
+const selSites = () => [...pipe.sel];
+const pct = (a, b) => (b ? fmtPct(a / b) : "—");
+const mad = (n) => n == null ? "—" : `${nf.format(Math.round(n))} MAD`;
+const madPrec = (n) => n == null ? "—" : `${String((Math.round(n * 100) / 100)).replace(".", ",")} MAD`;
+function card(title, body, meta = "") { return `<div class="card"><div class="card-h"><h2>${title}</h2>${meta ? `<span class="meta">${meta}</span>` : ""}</div><div class="card-b">${body}</div></div>`; }
+function table(head, rows) {
+  if (!rows.length) return empty("Rien à afficher", "");
+  return `<div class="table-wrap"><table><thead><tr>${head.map((h) => `<th class="${h.r ? "r" : ""}">${h.t}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+}
+function statusPills(obj) {
+  return Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill">${esc(k)} <b class="num">${fmt(v)}</b></span>`).join(" ");
+}
+
+function renderPipe() {
+  const d = pipe.data, el = $("#pipe-body");
+  if (!d) { el.innerHTML = ""; return; }
+  ({ synth: pSynth, articles: pArticles, images: pImages, pins: pPins, planner: pPlanner, costs: pCosts, fails: pFails })[pipe.tab]?.(d, el);
+}
+
+function pSynth(d, el) {
+  const A = d.articles, I = d.images, P = d.pins, C = d.cost, ps = P.byStatus || {};
+  const online = (ps.posted || 0) + (ps.scheduled || 0);
+  el.innerHTML = `<div class="kpis">
+    ${kpi("Articles publiés", fmt(A.published), `<span class="muted">sur ${fmt(A.total)} planifiés · ${fmt(A.generated)} générés</span>`)}
+    ${kpi("Articles en échec", `<span style="color:${A.failed ? "var(--crit)" : "inherit"}">${fmt(A.failed)}</span>`, `<a href="#" onclick="pipeTab('fails');return false" class="small">voir les échecs</a>`)}
+    ${kpi("Images", fmt(I.images), `<span class="muted">${fmt(I.articlesDone)} articles illustrés · ${String(I.avg).replace(".", ",")} / article</span>`)}
+    ${kpi("Pins en ligne", fmt(online), `<span class="muted">${fmt(ps.planned || 0)} planifiés · ${fmt(ps.done || 0)} en attente</span>`)}
+    ${kpi("Couverture Pinterest", pct(P.covered, P.published), `<span class="muted">${fmt(P.noPins)} articles publiés sans pin</span>`)}
+    ${kpi("Coût total", mad(C.total), `<span class="muted">${madPrec(C.perPublished)} / article publié · ${mad(C.month)} ce mois</span>`)}
+  </div>
+  <div class="grid g-3" style="margin-bottom:14px">
+    ${card("Articles générés / jour", `<div class="chart-box"><canvas id="pp-c1"></canvas></div>`, "30 jours")}
+    ${card("Articles illustrés / jour", `<div class="chart-box"><canvas id="pp-c2"></canvas></div>`, "30 jours")}
+    ${card("Pins créés / jour", `<div class="chart-box"><canvas id="pp-c3"></canvas></div>`, "30 jours")}
+  </div>
+  ${card("Par site", table(
+    [{ t: "Site" }, { t: "Publiés", r: 1 }, { t: "Échecs", r: 1 }, { t: "Illustrés", r: 1 }, { t: "Pins en ligne", r: 1 }, { t: "Planifiés", r: 1 }, { t: "En attente", r: 1 }, { t: "Sans pin", r: 1 }, { t: "Coût", r: 1 }],
+    A.bySite.filter((s) => s.site !== "—").sort((a, b) => b.published - a.published).map((s) => {
+      const im = I.bySite.find((x) => x.site === s.site) || {}, p = P.bySite.find((x) => x.site === s.site) || {}, c = C.bySite.find((x) => x.site === s.site) || {};
+      return `<tr><td><b>${esc(s.site)}</b></td><td class="r num">${fmt(s.published)}<span class="muted"> / ${fmt(s.total)}</span></td>
+        <td class="r num" style="${s.failed ? "color:var(--crit);font-weight:600" : ""}">${fmt(s.failed)}</td>
+        <td class="r num">${fmt(im.done || 0)}<span class="muted"> / ${fmt(im.textDone || 0)}</span></td>
+        <td class="r num">${fmt((p.posted || 0) + (p.scheduled || 0))}</td><td class="r num">${fmt(p.planned || 0)}</td><td class="r num">${fmt(p.done || 0)}</td>
+        <td class="r num" style="${p.noPins ? "color:var(--crit)" : ""}">${fmt(p.noPins || 0)}</td><td class="r num">${mad(c.t)}</td></tr>`;
+    })))}`;
+  lineChart("pp-c1", d.days, [{ label: "Articles", data: A.daily, color: css("--series-1") }]);
+  lineChart("pp-c2", d.days, [{ label: "Articles illustrés", data: I.daily, color: css("--series-1") }]);
+  lineChart("pp-c3", d.days, [{ label: "Pins", data: P.daily, color: css("--series-1") }]);
+}
+function pipeTab(t) { $$("#pipe-tabs button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.t === t)); pipe.tab = t; renderPipe(); }
+
+function pArticles(d, el) {
+  const A = d.articles;
+  el.innerHTML = `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Lancer WF1 (articles)</h2></div><div class="card-b">
+    ${chips("ch-a")}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center">
+      <input type="text" id="wf1-weeks" placeholder="Semaines (ex. 3,4) — vide = toutes" style="flex:1 1 200px">
+      <button class="btn primary" id="wf1-run">Lancer WF1</button>
+      <button class="btn" id="wf1-retry">Relancer les échecs</button>
+      <button class="btn ghost" id="wf1-diag">Diagnostic</button>
+    </div><div id="wf1-out" style="margin-top:10px"></div></div></div>
+  <div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Statuts</h2></div><div class="card-b">${statusPills(A.byStatus)}</div></div>
+  <div class="grid g-2">
+    ${card("Par semaine", table([{ t: "Semaine" }, { t: "Total", r: 1 }, { t: "Générés", r: 1 }, { t: "Publiés", r: 1 }, { t: "Échecs", r: 1 }],
+      A.byWeek.map((w) => `<tr><td>S${esc(w.week)}</td><td class="r num">${fmt(w.total)}</td><td class="r num">${fmt(w.generated)}</td><td class="r num">${fmt(w.published)}</td><td class="r num" style="${w.failed ? "color:var(--crit)" : ""}">${fmt(w.failed)}</td></tr>`)))}
+    ${card("Par site", table([{ t: "Site" }, { t: "En attente", r: 1 }, { t: "Brouillon", r: 1 }, { t: "Programmés", r: 1 }, { t: "Publiés", r: 1 }, { t: "Échecs", r: 1 }],
+      A.bySite.filter((s) => s.site !== "—").map((s) => `<tr><td><b>${esc(s.site)}</b></td><td class="r num">${fmt(s.pending)}</td><td class="r num">${fmt(s.drafted)}</td><td class="r num">${fmt(s.scheduled)}</td><td class="r num">${fmt(s.published)}</td><td class="r num" style="${s.failed ? "color:var(--crit)" : ""}">${fmt(s.failed)}</td></tr>`)))}
+  </div>`;
+  bindChips("ch-a");
+  const weeks = () => $("#wf1-weeks").value.split(/[,; ]+/).map(Number).filter(Boolean);
+  $("#wf1-run").onclick = (e) => act(e.target, "wf1_run", { sites: selSites(), weeks: weeks() },
+    { confirmText: `Lancer WF1 sur ${pipe.sel.size ? selSites().join(", ") : "tous les sites"} ?`, done: (r) => r.message || (r.ok ? "WF1 lancé" : `WF1 : erreur HTTP ${r.code}`) });
+  $("#wf1-retry").onclick = (e) => act(e.target, "wf1_retry_failed", { sites: selSites(), weeks: weeks() },
+    { confirmText: "Remettre les articles en échec en pending et relancer WF1 ?", done: (r) => r.message || (r.ok ? "Échecs relancés" : `Erreur HTTP ${r.code}`) });
+  $("#wf1-diag").onclick = async (e) => {
+    const r = await act(e.target, "wf1_diagnostic", {}, { done: (x) => `${x.failed} en échec · ${x.processing} bloqués en processing` });
+    if (!r) return;
+    $("#wf1-out").innerHTML = `<p><b>${esc(r.recommendation || "")}</b></p>` + table([{ t: "Erreur" }, { t: "Nb", r: 1 }, { t: "Exemples" }],
+      (r.error_groups || []).map((g) => `<tr><td class="small">${esc(g.error)}</td><td class="r num">${g.count}</td><td class="small muted">${g.examples.map((x) => esc(x.id + " · " + x.keyword)).join("<br>")}</td></tr>`));
+  };
+}
+
+function pImages(d, el) {
+  const I = d.images, bs = I.byStatus || {};
+  const running = (bs.generating || 0) + (bs.processing || 0) + (bs.uploading || 0);
+  const failed = Object.entries(bs).filter(([k]) => k.startsWith("failed")).reduce((n, [, v]) => n + v, 0);
+  el.innerHTML = `<div class="kpis">
+    ${kpi("Articles illustrés", fmt(I.articlesDone), `<span class="muted">${fmt(bs.generated || 0)} générés, pas encore envoyés</span>`)}
+    ${kpi("Images", fmt(I.images), `<span class="muted">${String(I.avg).replace(".", ",")} par article</span>`)}
+    ${kpi("En cours", fmt(running), `<span class="muted">génération ou envoi</span>`)}
+    ${kpi("En échec", `<span style="color:${failed ? "var(--crit)" : "inherit"}">${fmt(failed)}</span>`, "")}
+  </div>
+  <div class="grid g-2" style="margin-bottom:14px">
+    ${card("Pod GPU RunPod", `
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="url" id="pod-url" value="${esc(d.pod?.url || "")}" placeholder="https://xxxx-8000.proxy.runpod.net" style="flex:1 1 260px">
+      <button class="btn primary" id="pod-save">Enregistrer</button><button class="btn" id="pod-test">Tester</button></div>
+      <div class="hint">${d.pod?.updated_at ? `Enregistrée ${rel(d.pod.updated_at)}` : "Aucune date d'enregistrement"} · WF2a lit cette URL.</div>
+      <div id="pod-out" style="margin-top:8px"></div>`)}
+    ${card("Lancer les images", `${chips("ch-i")}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn primary" id="wf2a">WF2a · générer</button>
+        <button class="btn" id="wf2b">WF2b · envoyer vers WP</button>
+        <button class="btn" id="wf2-retry">Relancer les échecs</button>
+      </div>`)}
+  </div>
+  <div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Statuts</h2></div><div class="card-b">${statusPills(bs)}</div></div>
+  ${card("Par site", table([{ t: "Site" }, { t: "Texte prêt", r: 1 }, { t: "En attente", r: 1 }, { t: "Génération", r: 1 }, { t: "Générées", r: 1 }, { t: "Envoi", r: 1 }, { t: "Terminées", r: 1 }, { t: "Échecs", r: 1 }, { t: "Images", r: 1 }],
+    I.bySite.filter((s) => s.site !== "—").map((s) => `<tr><td><b>${esc(s.site)}</b></td><td class="r num">${fmt(s.textDone)}</td><td class="r num">${fmt(s.pending)}</td><td class="r num">${fmt(s.generating)}</td><td class="r num">${fmt(s.generated)}</td><td class="r num">${fmt(s.uploading)}</td><td class="r num">${fmt(s.done)}</td><td class="r num" style="${s.failed ? "color:var(--crit)" : ""}">${fmt(s.failed)}</td><td class="r num">${fmt(s.images)}</td></tr>`)))}`;
+  bindChips("ch-i");
+  $("#pod-save").onclick = (e) => act(e.target, "save_pod", { pod_url: $("#pod-url").value.trim() }, { done: (r) => r.ok ? "URL du pod enregistrée" : r.error });
+  $("#pod-test").onclick = async (e) => {
+    const r = await act(e.target, "test_pod", {}, { done: (x) => x.ok ? "Pod en ligne" : (x.error || "Pod injoignable") });
+    if (r?.tests) $("#pod-out").innerHTML = r.tests.map((t) => `<div class="small"><span class="status ${t.code && t.code < 400 ? "ok" : "crit"}">${esc(t.path)} · ${t.code || "erreur"} · ${t.ms} ms</span> <span class="muted">${esc(t.body)}</span></div>`).join("");
+  };
+  $("#wf2a").onclick = (e) => act(e.target, "wf2_run", { sites: selSites() }, { confirmText: "Lancer WF2a (génération GPU) ? Le pod doit être allumé.", done: (r) => r.ok ? "WF2a lancé" : `WF2a : erreur HTTP ${r.code}` });
+  $("#wf2b").onclick = (e) => act(e.target, "wf2b_run", { sites: selSites() }, { done: (r) => r.ok ? "WF2b lancé" : `WF2b : erreur HTTP ${r.code}` });
+  $("#wf2-retry").onclick = (e) => act(e.target, "wf2_retry_failed", { sites: selSites() }, { confirmText: "Repasser les images en échec en « generated » et relancer WF2b ?", done: (r) => r.ok ? "Échecs relancés" : `Erreur HTTP ${r.code}` });
+}
+
+function pPins(d, el) {
+  const P = d.pins, ps = P.byStatus || {};
+  const sites = P.bySite.filter((s) => s.site !== "—");
+  const max = Math.max(1, ...sites.flatMap((s) => d.nextDays.map((day) => P.cal?.[s.site]?.[day] || 0)));
+  const dayLbl = (k) => new Date(k + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
+  el.innerHTML = `<div class="kpis">
+    ${kpi("En ligne", fmt(ps.posted || 0), `<span class="muted">publiés sur Pinterest</span>`)}
+    ${kpi("Programmés Blotato", fmt(ps.scheduled || 0), "")}
+    ${kpi("Planifiés", fmt(ps.planned || 0), `<span class="muted">heure fixée, pas encore envoyés</span>`)}
+    ${kpi("En attente", fmt(ps.done || 0), `<span class="muted">générés, sans date</span>`)}
+    ${kpi("En erreur", `<span style="color:${ps.error ? "var(--crit)" : "inherit"}">${fmt(ps.error || 0)}</span>`, "")}
+    ${kpi("Doublons même jour", `<span style="color:${P.dupCount ? "var(--crit)" : "inherit"}">${fmt(P.dupCount)}</span>`, `<span class="muted">même article, même compte</span>`)}
+  </div>
+  <div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Générer des pins (WF3a)</h2></div><div class="card-b">${chips("ch-p")}
+    <div style="margin-top:10px"><button class="btn primary" id="wf3a">Lancer WF3a</button></div></div></div>
+  ${card("Calendrier · 14 prochains jours", `<div class="table-wrap"><table><thead><tr><th>Site</th>${d.nextDays.map((k) => `<th class="r">${dayLbl(k)}</th>`).join("")}</tr></thead><tbody>
+    ${sites.map((s) => `<tr><td><b>${esc(s.site)}</b></td>${d.nextDays.map((k) => { const n = P.cal?.[s.site]?.[k] || 0;
+      return `<td class="r num" style="${n ? `background:color-mix(in srgb, var(--series-1) ${Math.round(12 + 50 * n / max)}%, transparent)` : "color:var(--crit)"}" title="${esc(s.site)} · ${k} : ${n} pin(s)">${n || "·"}</td>`; }).join("")}</tr>`).join("")}
+    </tbody></table></div><p class="hint">Programmés + planifiés par jour. Un « · » rouge = aucun pin ce jour-là.</p>`)}
+  <div style="height:14px"></div>
+  ${card("Par compte", table([{ t: "Site" }, { t: "Compte" }, { t: "Attente", r: 1 }, { t: "Planifiés", r: 1 }, { t: "Programmés", r: 1 }, { t: "En ligne", r: 1 }, { t: "Erreurs", r: 1 }, { t: "7 j à venir", r: 1 }, { t: "Couverture", r: 1 }],
+    sites.map((s) => `<tr><td><b>${esc(s.site)}</b></td><td class="mono small">${esc(s.account || "—")}</td><td class="r num">${fmt(s.done)}</td><td class="r num">${fmt(s.planned)}</td><td class="r num">${fmt(s.scheduled)}</td><td class="r num">${fmt(s.posted)}</td><td class="r num" style="${s.error ? "color:var(--crit)" : ""}">${fmt(s.error)}</td><td class="r num">${fmt(s.next7)}</td><td class="r num">${pct(s.covered, s.pubArticles)}</td></tr>`)))}`;
+  bindChips("ch-p");
+  $("#wf3a").onclick = (e) => act(e.target, "wf3_run", { sites: selSites() }, { confirmText: "Lancer WF3a (génération de pins) ?", done: (r) => r.ok ? "WF3a lancé" : `WF3a : erreur HTTP ${r.code}` });
+}
+
+function pPlanner(d, el) {
+  const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  const v = (id, def) => { try { return localStorage.getItem("plan_" + id) ?? def; } catch (_) { return def; } };
+  el.innerHTML = `<div class="grid g-2" style="margin-bottom:14px">
+    ${card("Planifier les pins", `${chips("ch-pl")}
+      <div class="kv" style="margin-top:12px">
+        <label for="pl-start">Premier jour</label><input type="date" id="pl-start" value="${tomorrow}">
+        <label for="pl-days">Nombre de jours</label><input type="number" id="pl-days" min="1" max="60" value="${v("days", 7)}">
+        <label for="pl-per">Pins / jour / compte</label><input type="number" id="pl-per" min="1" max="25" value="${v("per", 3)}">
+        <label>Plage horaire</label><div style="display:flex;gap:6px;align-items:center"><input type="number" id="pl-h1" min="0" max="23" value="${v("h1", 7)}" style="width:70px"> h → <input type="number" id="pl-h2" min="1" max="24" value="${v("h2", 22)}" style="width:70px"> h</div>
+        <label for="pl-gap">Écart minimum (min)</label><input type="number" id="pl-gap" min="5" value="${v("gap", 30)}">
+        <label for="pl-avoid">Éviter le même article (jours)</label><input type="number" id="pl-avoid" min="0" max="30" value="${v("avoid", 2)}">
+        <label for="pl-tz">Fuseau du public</label><select id="pl-tz">${["Europe/Berlin", "Europe/Paris", "Africa/Casablanca"].map((z) => `<option ${v("tz", "Europe/Berlin") === z ? "selected" : ""}>${z}</option>`).join("")}</select>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn" id="pl-preview">Aperçu</button>
+        <button class="btn primary" id="pl-apply" ${pipe.preview ? "" : "disabled"}>Appliquer cet aperçu</button>
+        <button class="btn ghost danger" id="pl-unplan">Déplanifier</button>
+      </div>
+      <p class="hint">Jamais deux fois le même article le même jour sur un compte. Heures aléatoires dans la plage. « Appliquer » écrit la colonne « Planifié pour » du Sheet.</p>`)}
+    ${card("Envoi automatique", `<div id="auto-out" class="small muted">Statut inconnu.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn" id="auto-status">Statut</button>
+        <button class="btn primary" id="auto-on">Activer (toutes les 10 min)</button>
+        <button class="btn ghost danger" id="auto-off">Couper</button>
+        <button class="btn" id="send-now">Envoyer les pins dus maintenant</button>
+      </div><p class="hint">Le déclencheur Apps Script appelle WF3b (mode direct) pour les pins dont l'heure est arrivée.</p>`)}
+  </div>
+  <div id="pl-out"></div>`;
+  bindChips("ch-pl");
+  const opts = () => {
+    const o = { sites: selSites(), start: $("#pl-start").value, days: $("#pl-days").value, per_day: $("#pl-per").value, h_start: $("#pl-h1").value,
+      h_end: $("#pl-h2").value, min_gap: $("#pl-gap").value, avoid_days: $("#pl-avoid").value, tz: $("#pl-tz").value };
+    try { [["days", o.days], ["per", o.per_day], ["h1", o.h_start], ["h2", o.h_end], ["gap", o.min_gap], ["avoid", o.avoid_days], ["tz", o.tz]].forEach(([k, x]) => localStorage.setItem("plan_" + k, x)); } catch (_) {}
+    return o;
+  };
+  const showPlan = (r, applied) => {
+    const days = r.days || [];
+    $("#pl-out").innerHTML = card(applied ? `Plan appliqué · ${fmt(r.written || r.total)} pins écrits` : `Aperçu · ${fmt(r.total)} pins`,
+      `${r.shortage?.length ? `<p class="small" style="color:var(--crit)">Pas assez de pins pour ${r.shortage.length} jour(s)/compte : ${esc(r.shortage.slice(0, 6).map((x) => `${x.site} ${x.day} (−${x.missing})`).join(", "))}${r.shortage.length > 6 ? "…" : ""}</p>` : ""}
+       ${r.skipped && (r.skipped.noAccount + r.skipped.noBoard + r.skipped.noImage) ? `<p class="small muted">Ignorés : ${r.skipped.noAccount} sans compte, ${r.skipped.noBoard} sans board, ${r.skipped.noImage} sans image.</p>` : ""}
+       ${table([{ t: "Site" }, { t: "Compte" }, ...days.map((k) => ({ t: new Date(k + "T12:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }), r: 1 })), { t: "Ajoutés", r: 1 }, { t: "Reste", r: 1 }],
+         (r.perSite || []).map((s) => `<tr><td><b>${esc(s.site)}</b></td><td class="mono small">${esc(s.account)}</td>${days.map((k) => `<td class="r num">${(s.exist?.[k] || 0) ? `<span class="muted">${s.exist[k]}+</span>` : ""}${s.days?.[k] || 0}</td>`).join("")}<td class="r num"><b>${fmt(s.planned)}</b></td><td class="r num">${fmt(s.waiting)}</td></tr>`))}
+       <p class="hint">« n+ » = pins déjà programmés ce jour-là avant cet ajout.</p>`);
+  };
+  $("#pl-preview").onclick = async (e) => {
+    const o = opts();
+    const r = await act(e.target, "plan_pins", { ...o, dry: "1" }, { done: (x) => x.ok ? `${x.total} pins dans l'aperçu` : x.error });
+    if (r?.ok) { pipe.preview = { ...o, seed: String(r.options?.seed || "") }; showPlan(r, false); $("#pl-apply").disabled = false; }
+  };
+  $("#pl-apply").onclick = async (e) => {
+    if (!pipe.preview) return;
+    const r = await act(e.target, "plan_pins", { ...pipe.preview, dry: "0" }, { confirmText: "Écrire ce planning dans le Sheet ?", done: (x) => x.ok ? `${x.written || 0} pins planifiés` : x.error });
+    if (r?.ok) { showPlan(r, true); pipe.preview = null; }
+  };
+  $("#pl-unplan").onclick = (e) => act(e.target, "unplan_pins", { sites: selSites() },
+    { confirmText: `Effacer les planifications futures non envoyées (${pipe.sel.size ? selSites().join(", ") : "tous les sites"}) ?`, done: (r) => r.ok ? `${r.cleared} planification(s) effacée(s)` : r.error });
+  const showAuto = (r) => { if (!r) return; const l = r.last || {};
+    $("#auto-out").innerHTML = `<span class="status ${r.on ? "ok" : "warn"}">${r.on ? "Activé" : "Coupé"}</span>${l.at ? ` · dernier envoi ${rel(l.at)} : ${l.sent} pin(s)${l.expired ? `, ${l.expired} expiré(s)` : ""}${l.ok === false ? " · <span style='color:var(--crit)'>erreur</span>" : ""}` : ""}`; };
+  $("#auto-status").onclick = async (e) => showAuto(await act(e.target, "auto_status", {}, { done: (r) => r.on ? "Envoi automatique activé" : "Envoi automatique coupé" }));
+  $("#auto-on").onclick = async (e) => showAuto(await act(e.target, "auto_on", {}, { done: (r) => r.on ? "Envoi automatique activé" : (r.error || "Impossible d'activer") }));
+  $("#auto-off").onclick = async (e) => showAuto(await act(e.target, "auto_off", {}, { confirmText: "Couper l'envoi automatique des pins planifiés ?", done: () => "Envoi automatique coupé" }));
+  $("#send-now").onclick = (e) => act(e.target, "send_planned", {}, { done: (r) => r.message || (r.ok ? "OK" : r.error) });
+  gas("auto_status", {}).then(showAuto).catch(() => {});
+}
+
+function pCosts(d, el) {
+  const C = d.cost, U = d.costs || {};
+  el.innerHTML = `<div class="kpis">
+    ${kpi("Coût total", mad(C.total), "")}
+    ${kpi("Ce mois", mad(C.month), "")}
+    ${kpi("Par article publié", madPrec(C.perPublished), "")}
+    ${kpi("Articles", mad(C.articles), `<span class="muted">${madPrec(U.article)} / article</span>`)}
+    ${kpi("Images", mad(C.images), `<span class="muted">${madPrec(U.image)} / image</span>`)}
+    ${kpi("Pins", mad(C.pins), `<span class="muted">${madPrec(U.pin)} / pin</span>`)}
+  </div>
+  <div class="card" style="margin-bottom:14px"><div class="card-h"><h2>Coût par jour · 30 jours</h2>
+    <div class="legend"><span><i class="sq" style="background:var(--series-1)"></i>Articles</span><span><i class="sq" style="background:var(--series-2)"></i>Images</span><span><i class="sq" style="background:var(--series-3)"></i>Pins</span></div></div>
+    <div class="card-b"><div class="chart-box tall"><canvas id="pp-cost"></canvas></div></div></div>
+  <div class="grid g-2">
+    ${card("Par site", table([{ t: "Site" }, { t: "Articles", r: 1 }, { t: "Images", r: 1 }, { t: "Pins", r: 1 }, { t: "Total", r: 1 }, { t: "/ publié", r: 1 }],
+      C.bySite.filter((s) => s.site !== "—").map((s) => `<tr><td><b>${esc(s.site)}</b></td><td class="r num">${mad(s.a)}</td><td class="r num">${mad(s.i)}</td><td class="r num">${mad(s.p)}</td><td class="r num"><b>${mad(s.t)}</b></td><td class="r num">${s.published ? madPrec(s.t / s.published) : "—"}</td></tr>`)))}
+    ${card("Coûts unitaires", `<form id="cost-form" class="kv">
+        <label for="c-a">Article (MAD)</label><input type="number" step="0.01" id="c-a" value="${U.article}">
+        <label for="c-i">Image (MAD)</label><input type="number" step="0.01" id="c-i" value="${U.image}">
+        <label for="c-p">Pin (MAD)</label><input type="number" step="0.01" id="c-p" value="${U.pin}">
+      </form><div style="margin-top:12px"><button class="btn primary" id="cost-save">Enregistrer</button></div>
+      <p class="hint">Stockés dans Apps Script (Script Properties), comme dans la v3.</p>`)}
+  </div>`;
+  barChart("pp-cost", C.daily.map((x) => x.d), [
+    { label: "Articles", data: C.daily.map((x) => x.a), color: css("--series-1") },
+    { label: "Images", data: C.daily.map((x) => x.i), color: css("--series-2") },
+    { label: "Pins", data: C.daily.map((x) => x.p), color: css("--series-3") },
+  ]);
+  $("#cost-save").onclick = (e) => act(e.target, "set_costs", { article: $("#c-a").value, image: $("#c-i").value, pin: $("#c-p").value },
+    { done: (r) => r.ok ? "Coûts enregistrés · recalcul au prochain rafraîchissement" : r.error });
+}
+
+function pFails(d, el) {
+  const A = d.articles, I = d.images, P = d.pins;
+  const rows = (list, kind) => list.map((x) => `<tr><td class="mono small">${esc(x.id || x.pin)}</td><td>${esc(x.site)}</td><td class="trunc" style="max-width:220px" title="${esc(x.kw || "")}">${esc(x.kw || x.id || "")}</td><td><span class="pill">${esc(x.status)}</span></td><td class="small muted trunc" style="max-width:360px" title="${esc(x.error)}">${esc(x.error)}</td></tr>`);
+  const head = [{ t: "ID" }, { t: "Site" }, { t: "Mot-clé / article" }, { t: "Statut" }, { t: "Erreur" }];
+  el.innerHTML = `<div class="card" style="margin-bottom:14px"><div class="card-b" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span><b>${fmt(A.failedList.length)}</b> articles · <b>${fmt(I.failedList.length)}</b> images · <b>${fmt(P.errors.length)}</b> pins · <b>${fmt(P.dupCount)}</b> doublons</span>
+      <span style="flex:1"></span><button class="btn danger" id="reset-failed">Tout remettre en pending</button></div></div>
+    <div class="grid" style="gap:14px">
+      ${card("Articles", table(head, rows(A.failedList)))}
+      ${card("Images", table(head, rows(I.failedList)))}
+      ${card("Pins", table(head, rows(P.errors)))}
+      ${P.dupes.length ? card("Doublons (même article, même compte, même jour)", table([{ t: "Jour" }, { t: "Site" }, { t: "Compte" }, { t: "Article" }],
+        P.dupes.map((x) => `<tr><td>${esc(x.day)}</td><td>${esc(x.site)}</td><td class="mono small">${esc(x.account)}</td><td class="mono small">${esc(x.article)}</td></tr>`))) : ""}
+    </div>`;
+  $("#reset-failed").onclick = (e) => act(e.target, "reset_failed", {},
+    { confirmText: "Remettre en pending tous les articles et images en échec ou bloqués (texte + images) ?", done: (r) => r.ok ? `${r.reset?.text ?? 0} articles et ${r.reset?.img ?? 0} images remis en pending` : r.error });
 }
 
 /* ───────── Settings ───────── */
@@ -1035,6 +1356,8 @@ async function loadSettings() {
     ["monthly_top_n", "Requêtes / pages par mois", "number"],
     ["backfill_months", "Historique à importer (mois)", "number"],
     ["alert_stuck_minutes", "Alerte exécution bloquée (min)", "number"],
+    ["pipeline_failed_alert", "Alerte échecs pipeline (seuil)", "number"],
+    ["pipeline_pin_gap_hours", "Alerte « aucun pin planifié » (h)", "number"],
   ];
   $("#st-form").innerHTML = fields.map(([k, l, t]) => `<label for="set-${k}">${l}</label><input id="set-${k}" name="${k}" type="${t === "number" ? "number" : "url"}" value="${esc(S[k] ?? "")}" ${t === "url" ? 'placeholder="https://…"' : ""}>`).join("");
 }
