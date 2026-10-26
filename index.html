@@ -627,6 +627,22 @@ body:not(:has(#app:not([hidden]))) .agent-fab { display: none; }
   .agent { inset: 0; width: auto; border-radius: 0; z-index: 50; }
 }
 
+/* ═══════════ Calendrier (jour / période) ═══════════ */
+.pcal { display: inline-flex; gap: 4px; align-items: center; }
+.pcal .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pcal .btn.on { background: var(--accent); border-color: var(--accent); color: var(--ink); font-weight: 700; }
+.pcal-x { width: 32px; padding: 0; justify-content: center; }
+.pcal-x svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+.pcal-pop { position: absolute; z-index: 60; display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
+.pcal-pop[hidden] { display: none; }
+.pcal-pop .seg { align-self: flex-start; }
+.pcal-f { display: flex; gap: 10px; flex-wrap: wrap; }
+.pcal-f .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 130px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.pcal-f input[type="date"] { width: 100%; height: 36px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.pcal-pop .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pcal-pop .hint { margin: 0; }
+.pday-k { margin-bottom: 4px; }
+
 /* Démarrage */
 .boot-card { width: min(360px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .boot-card p { padding: 14px 22px 16px; color: var(--ink-3); font-size: 13.5px; }
@@ -655,6 +671,7 @@ body:not(:has(#app:not([hidden]))) .agent-fab { display: none; }
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10h-8L7 19.5v-4H4.5z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-5.5 16-3-6.5zM11.5 13.5 20 4"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4M8 13.5h2M14 13.5h2M8 17h2"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
@@ -1135,7 +1152,7 @@ const Charts = {
           y: { stacked: !isLine, reverse: !!spec.pos, beginAtZero: !spec.pos, border: { display: false }, grid: { color: grid, drawTicks: false }, ticks: { maxTicksLimit: 5, padding: 8, precision: spec.pos ? 1 : 0, callback: (v) => this._fmtY(spec, v) } },
         },
       },
-      plugins: [isLine ? Charts.crosshair : null, spec.markers ? Charts.markerPlugin(spec) : null].filter(Boolean),
+      plugins: [Charts.bandPlugin(spec), isLine ? Charts.crosshair : null, spec.markers ? Charts.markerPlugin(spec) : null].filter(Boolean),
     };
   },
   crosshair: {
@@ -1147,6 +1164,23 @@ const Charts = {
       c.save(); c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom);
       c.lineWidth = 1; c.strokeStyle = css("--ink-3"); c.stroke(); c.restore();
     },
+  },
+  /** Bande jaune derrière le(s) jour(s) choisi(s) au calendrier, sur tout graphique dont l'axe X contient ces dates. */
+  bandPlugin(spec) {
+    const P = typeof Period !== "undefined" ? Period.custom() : null;
+    if (!P || spec.band === false) return null;
+    const i0 = spec.labels.findIndex((l) => String(l).slice(0, 10) >= P.from), i1 = spec.labels.findLastIndex((l) => String(l).slice(0, 10) <= P.to);
+    if (i0 < 0 || i1 < i0 || (i0 === 0 && i1 === spec.labels.length - 1 && spec.labels.length > 1)) return null; /* toute la courbe = la période : pas de bande */
+    return {
+      id: "band",
+      beforeDatasetsDraw(chart) {
+        const { ctx, chartArea } = chart, xs = chart.scales.x, n = spec.labels.length;
+        const step = n > 1 ? Math.abs(xs.getPixelForValue(1) - xs.getPixelForValue(0)) : chartArea.right - chartArea.left;
+        const a = Math.max(chartArea.left, xs.getPixelForValue(i0) - step / 2), b = Math.min(chartArea.right, xs.getPixelForValue(i1) + step / 2);
+        ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = css("--accent") || "#f2c230";
+        ctx.fillRect(a, chartArea.top, Math.max(3, b - a), chartArea.bottom - chartArea.top); ctx.restore();
+      },
+    };
   },
   /** Petits triangles au pied de la courbe les jours marqués (ex. pics de publication). */
   markerPlugin(spec) {
@@ -1702,6 +1736,167 @@ document.addEventListener("click", async (e) => {
 });
 
 /* ═══════════ Vue d'ensemble ═══════════ */
+/* ═══════════ Calendrier : un jour ou une période, partagé par toutes les vues ═══════════
+   Choix gardé dans l'URL (#…&from=AAAA-MM-JJ&to=AAAA-MM-JJ) et dans la session : il suit quand on change d'onglet.
+   Sans choix, chaque vue garde ses boutons « 7 j / 28 j / … » (jours glissants jusqu'à J-1). */
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const dayDiff = (a, b) => Math.round((dayDate(b) - dayDate(a)) / 864e5);
+const Period = {
+  _s: (() => { try { const p = JSON.parse(sessionStorage.getItem("period") || "null"); return p && DAY_RE.test(p.from) && DAY_RE.test(p.to) ? p : null; } catch (_) { return null; } })(),
+  _save(p) { this._s = p; try { p ? sessionStorage.setItem("period", JSON.stringify(p)) : sessionStorage.removeItem("period"); } catch (_) {} },
+  /** Période choisie ({from,to}) ou null. L'URL prime ; sinon la session. */
+  custom(params = Router.params) {
+    const f = params?.from, t = params?.to;
+    if (DAY_RE.test(f || "") && DAY_RE.test(t || "")) {
+      const today = daysAgo(0);
+      let a = f <= t ? f : t, b = f <= t ? t : f;
+      if (b > today) b = today; if (a > b) a = b;
+      const p = { from: a, to: b };
+      if (!this._s || this._s.from !== a || this._s.to !== b) this._save(p);
+      return p;
+    }
+    return this._s;
+  },
+  /** Choisit (p = {from,to}) ou efface (null) la période, puis recharge la vue. */
+  set(p) {
+    this._save(p);
+    Router.setParams(p ? { from: p.from, to: p.to } : { from: null, to: null });
+    Router.render({ force: false });
+  },
+  /** Efface sans recharger (clic sur un bouton « 7 j / 28 j » : la vue se recharge elle-même). */
+  drop() { this._save(null); if (Router.params.from || Router.params.to) Router.setParams({ from: null, to: null }); },
+  /** Fenêtre à afficher. d = jours glissants de la vue ; end = décalage de fin (1 = J-1 pour Google, 0 = aujourd'hui).
+      cFrom/cTo = fenêtre des courbes : un seul jour → les ctx jours qui le précèdent, pour voir le contexte. */
+  resolve(params, d, { end = 1, ctx = 28 } = {}) {
+    const c = this.custom(params);
+    if (!c) {
+      const to = daysAgo(end), from = daysAgo(d + end - 1);
+      return { custom: false, single: false, from, to, d, pfrom: addDays(from, -d), pto: addDays(from, -1), cFrom: from, cTo: to,
+        label: `${d} derniers jours`, short: `${d} j`, vs: `vs ${d} j précédents` };
+    }
+    const n = dayDiff(c.from, c.to) + 1, single = n === 1;
+    const y = (k) => (k.slice(0, 4) !== daysAgo(0).slice(0, 4) ? " " + k.slice(0, 4) : "");
+    return {
+      custom: true, single, from: c.from, to: c.to, d: n, pfrom: addDays(c.from, -n), pto: addDays(c.from, -1),
+      cFrom: single ? addDays(c.to, -(ctx - 1)) : c.from, cTo: c.to,
+      label: single ? fmtDayLong(c.from) : `${fmtDay(c.from)}${y(c.from)} → ${fmtDay(c.to)}${y(c.to)}`,
+      short: single ? `${fmtDay(c.from)}${y(c.from)}` : `${fmtDay(c.from)} → ${fmtDay(c.to)}`,
+      vs: single ? "vs la veille" : `vs les ${n} jours d'avant`,
+    };
+  },
+  /** Bornes ISO (instant) d'une période en jours de Casablanca, pour filtrer des horodatages. */
+  bounds(P) { return { gte: new Date(`${P.from}T00:00:00${TZ_OFF()}`).toISOString(), lt: new Date(`${addDays(P.to, 1)}T00:00:00${TZ_OFF()}`).toISOString() }; },
+  /** Marqueur des courbes : le(s) jour(s) choisi(s). */
+  marks(P, base = null) {
+    if (!P.custom) return base;
+    const m = { ...(base || {}) };
+    for (let k = P.from; k <= P.to; k = addDays(k, 1)) m[k] = m[k] ? `${m[k]} · jour choisi` : "jour choisi";
+    return m;
+  },
+  /** Bouton calendrier (à poser dans .filters). */
+  ctl() {
+    return `<div class="pcal" data-pcal>
+      <button type="button" class="btn" data-pcal-open aria-haspopup="dialog" aria-expanded="false" title="Choisir un jour ou une période">${icon("cal")}<span data-pcal-label>Calendrier</span></button>
+      <button type="button" class="btn icon ghost pcal-x" data-pcal-clear hidden aria-label="Revenir aux derniers jours" title="Revenir aux derniers jours">${icon("x")}</button>
+    </div>`;
+  },
+  /** Met le bouton et les boutons « 7 j / 28 j » de la vue à jour. */
+  paint(el, P, segSel) {
+    $$("[data-pcal]", el).forEach((w) => {
+      $("[data-pcal-label]", w).textContent = P.custom ? P.short : "Calendrier";
+      $("[data-pcal-open]", w).classList.toggle("on", P.custom);
+      $("[data-pcal-clear]", w).hidden = !P.custom;
+    });
+    if (segSel && P.custom) $$(`${segSel} button`, el).forEach((b) => b.setAttribute("aria-pressed", "false"));
+  },
+  _pop: null,
+  _open(btn) {
+    const P = this.custom(), today = daysAgo(0);
+    let pop = this._pop;
+    if (!pop) {
+      pop = this._pop = document.createElement("div");
+      pop.className = "pcal-pop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Choisir un jour ou une période");
+      document.body.appendChild(pop);
+      pop.addEventListener("click", (e) => this._click(e));
+      pop.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); this._close(true); } if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); this._apply(); } });
+    }
+    const mode = P && P.from !== P.to ? "range" : "day";
+    const quick = [[1, "Hier"], [2, "Avant-hier"], [3, "J-3 (Google complet)"], [7, "Il y a 7 j"]];
+    pop.innerHTML = `
+      <div class="seg" data-pcal-mode role="group" aria-label="Mode"><button type="button" data-m="day" aria-pressed="${mode === "day"}">Un jour</button><button type="button" data-m="range" aria-pressed="${mode === "range"}">Une période</button></div>
+      <div class="pcal-f">
+        <label class="field"><span data-pcal-l1>${mode === "day" ? "Jour" : "Du"}</span><input type="date" data-pcal-from max="${today}" value="${esc(P?.from || daysAgo(1))}"></label>
+        <label class="field" data-pcal-to-w ${mode === "day" ? "hidden" : ""}><span>Au</span><input type="date" data-pcal-to max="${today}" value="${esc(P?.to || daysAgo(1))}"></label>
+      </div>
+      <div class="chips">${quick.map(([n, t]) => `<button type="button" class="chip" data-pcal-q="${n}">${esc(t)}</button>`).join("")}<button type="button" class="chip" data-pcal-q="month">Ce mois-ci</button><button type="button" class="chip" data-pcal-q="lastmonth">Mois dernier</button></div>
+      <p class="hint">Google (Search Console, GA4) publie avec 2-3 jours de retard : les jours les plus récents sont encore incomplets.</p>
+      <div class="btn-row"><button type="button" class="btn primary" data-pcal-apply>Afficher</button><button type="button" class="btn ghost" data-pcal-cancel>Fermer</button>${P ? `<button type="button" class="btn ghost" data-pcal-reset>Revenir aux derniers jours</button>` : ""}</div>`;
+    pop.hidden = false; pop._btn = btn; btn.setAttribute("aria-expanded", "true");
+    const r = btn.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(12, Math.min(r.right - w, window.innerWidth - w - 12)) + "px";
+    pop.style.top = (r.bottom + window.scrollY + 6) + "px";
+    setTimeout(() => $("[data-pcal-from]", pop)?.focus(), 20);
+  },
+  _close(focus) {
+    const pop = this._pop; if (!pop || pop.hidden) return;
+    pop.hidden = true; pop._btn?.setAttribute("aria-expanded", "false"); if (focus) pop._btn?.focus();
+  },
+  _mode(pop) { return $("[data-pcal-mode] [aria-pressed=\"true\"]", pop)?.dataset.m || "day"; },
+  _apply() {
+    const pop = this._pop, f = $("[data-pcal-from]", pop).value, single = this._mode(pop) === "day";
+    const t = single ? f : $("[data-pcal-to]", pop).value;
+    if (!DAY_RE.test(f) || !DAY_RE.test(t)) { toast("Choisis une date", { err: true }); return; }
+    if (f > daysAgo(0) || t > daysAgo(0)) { toast("Date dans le futur : pas encore de données", { err: true }); return; }
+    this._close(false);
+    this.set(f <= t ? { from: f, to: t } : { from: t, to: f });
+  },
+  _click(e) {
+    const pop = this._pop;
+    const m = e.target.closest("[data-pcal-mode] button");
+    if (m) {
+      $$("[data-pcal-mode] button", pop).forEach((b) => b.setAttribute("aria-pressed", String(b === m)));
+      const range = m.dataset.m === "range";
+      $("[data-pcal-to-w]", pop).hidden = !range; $("[data-pcal-l1]", pop).textContent = range ? "Du" : "Jour";
+      return;
+    }
+    const q = e.target.closest("[data-pcal-q]");
+    if (q) {
+      const v = q.dataset.pcalQ;
+      if (v === "month" || v === "lastmonth") {
+        const now = new Date(daysAgo(0) + "T12:00:00Z");
+        const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (v === "lastmonth" ? 1 : 0), 1));
+        const last = v === "lastmonth" ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)) : new Date(daysAgo(0) + "T12:00:00Z");
+        this._close(false); this.set({ from: iso(first), to: iso(last) });
+      } else { const k = daysAgo(Number(v)); this._close(false); this.set({ from: k, to: k }); }
+      return;
+    }
+    if (e.target.closest("[data-pcal-apply]")) return this._apply();
+    if (e.target.closest("[data-pcal-cancel]")) return this._close(true);
+    if (e.target.closest("[data-pcal-reset]")) { this._close(false); this.set(null); }
+  },
+  bind() {
+    document.addEventListener("click", (e) => {
+      const o = e.target.closest("[data-pcal-open]");
+      if (o) { e.preventDefault(); this._pop && !this._pop.hidden && this._pop._btn === o ? this._close(true) : this._open(o); return; }
+      if (e.target.closest("[data-pcal-clear]")) { this.set(null); return; }
+      if (this._pop && !this._pop.hidden && !e.target.closest(".pcal-pop")) this._close(false);
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this._pop && !this._pop.hidden) this._close(true); });
+    window.addEventListener("resize", () => this._close(false));
+    Commands.register({ id: "pcal", label: "Choisir un jour (calendrier)", hint: "toutes les vues", run: () => { const b = $(`main.main > section[data-view="${Router.view}"] [data-pcal-open]`); if (b) b.click(); else toast("Pas de calendrier sur cette vue"); } });
+    Commands.register({ id: "pcal-y", label: "Afficher hier", hint: "calendrier", run: () => { const k = daysAgo(1); this.set({ from: k, to: k }); } });
+    Commands.register({ id: "pcal-clear", label: "Revenir aux derniers jours (effacer la date)", hint: "calendrier", run: () => this.set(null) });
+  },
+};
+/** Décalage horaire de Casablanca pour une date ISO « AAAA-MM-JJTHH:MM:SS±hh:mm ». */
+function TZ_OFF() {
+  try {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: TZ, timeZoneName: "longOffset" }).formatToParts(new Date()).find((x) => x.type === "timeZoneName")?.value || "GMT";
+    const m = p.match(/GMT([+-]\d{2}):?(\d{2})?/); return m ? `${m[1]}:${m[2] || "00"}` : "+00:00";
+  } catch (_) { return "+00:00"; }
+}
+
 const OV_PERIODS = [{ d: 7, t: "7 j" }, { d: 28, t: "28 j" }, { d: 90, t: "3 m" }];
 
 /* Repérage des workflows de la chaîne principale (les copies TENDANCE / JETABLE / tests sont exclues). */
@@ -1812,7 +2007,7 @@ Views.overview = {
     el.innerHTML = `
       <div class="vh">
         <div><h1>Vue d'ensemble</h1><p class="sub" id="ov-sub">Tous les sites suivis · données Google à J-1</p></div>
-        <div class="filters"><div class="seg" id="ov-period" role="group" aria-label="Période">${OV_PERIODS.map((p) => `<button type="button" data-d="${p.d}" aria-pressed="false">${p.t}</button>`).join("")}</div></div>
+        <div class="filters"><div class="seg" id="ov-period" role="group" aria-label="Période">${OV_PERIODS.map((p) => `<button type="button" data-d="${p.d}" aria-pressed="false">${p.t}</button>`).join("")}</div>${Period.ctl()}</div>
       </div>
       <div class="stack">
         <div id="ov-alerts"></div>
@@ -1836,6 +2031,7 @@ Views.overview = {
     $("#ov-period", el).addEventListener("click", (e) => {
       const b = e.target.closest("button[data-d]"); if (!b) return;
       lsSet("ov_d", b.dataset.d);
+      Period.drop();
       Router.setParams({ d: b.dataset.d });
       Router.render();
     });
@@ -1844,14 +2040,18 @@ Views.overview = {
     const el = ctx.el, force = ctx.force;
     const d = OV_PERIODS.some((p) => p.d === Number(ctx.params.d)) ? Number(ctx.params.d) : Number(lsGet("ov_d", 28)) || 28;
     $$("#ov-period button", el).forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.d) === d)));
-    const to = daysAgo(1), from = daysAgo(d), pfrom = daysAgo(2 * d), pto = daysAgo(d + 1);
+    const P = Period.resolve(ctx.params, d);
+    Period.paint(el, P, "#ov-period");
+    const { from, to, pfrom, pto } = P;
+    const vsS = P.custom ? (P.single ? "veille" : `${P.d} j avant`) : `${d} j`;
     const r = await settle({
-      sites: () => Data.siteOverview(d, { force }),
+      sites: () => (P.custom ? Store.get(`site_overview_range:${from}:${to}`, () => rpc("site_overview_range", { p_from: from, p_to: to, p_spark_from: P.cFrom }), { force }) : Data.siteOverview(d, { force })),
+      chart: () => (P.single ? rpc("site_series", { p_site: null, p_from: P.cFrom, p_to: P.cTo }) : Promise.resolve(null)),
       cur: () => rpc("site_series", { p_site: null, p_from: from, p_to: to }),
       prev: () => rpc("site_series", { p_site: null, p_from: pfrom, p_to: pto }),
       alerts: () => Data.openAlerts({ force }),
       wf: () => Data.workflowHealth({ force }),
-      daily: () => rpc("n8n_daily", { p_days: 14 }),
+      daily: () => (P.custom ? rpc("n8n_range", { p_from: P.cFrom, p_to: P.cTo }) : rpc("n8n_daily", { p_days: 14 })),
       pipe: () => Data.pipelineState({ force }),
       hc: () => Data.healthChecks({ force }),
     });
@@ -1865,7 +2065,7 @@ Views.overview = {
     const wpos = (arr) => { const i = sum(arr, "impressions"); return i ? arr.reduce((a, x) => a + num(x.avg_position) * num(x.impressions), 0) / i : null; };
     const clicks = sum(cur, "clicks"), pclicks = sum(prev, "clicks");
     $("#ov-sub", el).innerHTML = tracked.length
-      ? `<b>${plural(tracked.length, "site suivi", "sites suivis")}</b> · ${d} derniers jours (${esc(fmtDay(from))} → ${esc(fmtDay(to))}) vs ${d} jours précédents`
+      ? `<b>${plural(tracked.length, "site suivi", "sites suivis")}</b> · ${P.custom ? `<b>${esc(P.label)}</b>` : `${d} derniers jours (${esc(fmtDay(from))} → ${esc(fmtDay(to))})`} ${esc(P.vs)}`
       : r.sites.ok ? "Aucun site suivi pour l'instant" : "Sites indisponibles";
 
     /* Alertes ouvertes (3 max) */
@@ -1883,8 +2083,8 @@ Views.overview = {
     const seo = noSeo
       ? { tone: "off", count: "—", stx: ["off", "aucun site suivi"], title: "Connecte Google et active « Suivre » dans Connexions" }
       : { tone: syncErr ? "crit" : drop ? "warn" : "ok", count: fmt(clicks),
-          stx: syncErr ? ["crit", `${syncErr} synchro en erreur`] : pclicks ? (Math.abs(clicks - pclicks) / pclicks < 0.005 ? ["", `= stable vs ${d} j`] : [clicks > pclicks ? "ok" : "crit", `${clicks > pclicks ? "▲" : "▼"} ${fmtPct(Math.abs(clicks - pclicks) / pclicks, 0)} vs ${d} j`]) : ["", `${d} derniers jours`],
-          title: `Clics Google sur ${d} jours : ${fmtFull(clicks)} (période précédente : ${fmtFull(pclicks)})` };
+          stx: syncErr ? ["crit", `${syncErr} synchro en erreur`] : pclicks ? (Math.abs(clicks - pclicks) / pclicks < 0.005 ? ["", `= stable vs ${vsS}`] : [clicks > pclicks ? "ok" : "crit", `${clicks > pclicks ? "▲" : "▼"} ${fmtPct(Math.abs(clicks - pclicks) / pclicks, 0)} vs ${vsS}`]) : ["", P.custom ? P.short : `${d} derniers jours`],
+          title: `Clics Google · ${P.custom ? P.label : `${d} jours`} : ${fmtFull(clicks)} (période précédente : ${fmtFull(pclicks)})` };
     if (!r.pipe.ok && !r.wf.ok) $("#ov-line", el).innerHTML = errBox(r.pipe.error);
     else $("#ov-line", el).innerHTML = lineHtml(buildLine({ row, wfs, hc: r.hc.ok ? r.hc.data : [], seo }));
     const lastN8n = wfs.map((w) => w.last_started).filter(Boolean).sort().pop();
@@ -1907,7 +2107,8 @@ Views.overview = {
     ]);
 
     /* Graphiques */
-    const labels = cur.map((x) => x.date);
+    const ch = P.single && r.chart.ok ? r.chart.data || [] : cur;
+    const labels = ch.map((x) => x.date);
     const emptySeo = { title: "Aucun site suivi", text: `Connecte un compte Google puis active « Suivre » dans <a href="${Router.href("settings")}" data-nav="settings">Connexions</a>.` };
     const A = row?.data?.articles, days = row?.data?.days || [];
     let markers = null;
@@ -1920,10 +2121,11 @@ Views.overview = {
     }
     if (!r.cur.ok) { Charts.error("ov-clicks", r.cur.error); Charts.error("ov-sessions", r.cur.error); }
     else {
-      Charts.line("ov-clicks", { title: "Clics Google", labels, series: [{ label: "Clics", data: cur.map((x) => x.clicks), color: "--series-1", fill: true }], markers, lag: true, empty: noSeo ? emptySeo : undefined });
-      $("#meta-ov-clicks", el).innerHTML = noSeo ? "" : `${fmt(clicks)} au total · 2-3 derniers jours incomplets${markers ? ` · <span class="legend" style="display:inline-flex"><span><i class="mk"></i>pics de publication</span></span>` : ""}`;
-      Charts.line("ov-sessions", { title: "Sessions GA4", labels, series: [{ label: "Toutes sources", data: cur.map((x) => x.sessions), color: "--series-1" }, { label: "Pinterest", data: cur.map((x) => x.pinterest_sessions), color: "--series-2" }], lag: true, empty: noSeo ? emptySeo : undefined });
+      Charts.line("ov-clicks", { title: "Clics Google", labels, series: [{ label: "Clics", data: ch.map((x) => x.clicks), color: "--series-1", fill: true }], markers, lag: !P.custom, empty: noSeo ? emptySeo : undefined });
+      $("#meta-ov-clicks", el).innerHTML = noSeo ? "" : `${fmt(clicks)} ${P.single ? "ce jour-là · 28 j de contexte" : "au total"} · 2-3 derniers jours incomplets${markers ? ` · <span class="legend" style="display:inline-flex"><span><i class="mk"></i>pics de publication</span></span>` : ""}`;
+      Charts.line("ov-sessions", { title: "Sessions GA4", labels, series: [{ label: "Toutes sources", data: ch.map((x) => x.sessions), color: "--series-1" }, { label: "Pinterest", data: ch.map((x) => x.pinterest_sessions), color: "--series-2" }], lag: !P.custom, empty: noSeo ? emptySeo : undefined });
     }
+    { const h2 = $("#box-ov-n8n", el)?.closest(".panel")?.querySelector(".panel-h h2"); if (h2) h2.textContent = `Exécutions n8n · ${P.custom ? (P.single ? `28 j jusqu'au ${fmtDay(P.to)}` : P.short) : "14 jours"}`; }
     if (!r.daily.ok) Charts.error("ov-n8n", r.daily.error);
     else Charts.bar("ov-n8n", { title: "Exécutions n8n", labels: r.daily.data.map((x) => x.date), series: [{ label: "Succès", data: r.daily.data.map((x) => x.success), color: "--good" }, { label: "Échecs", data: r.daily.data.map((x) => x.failed), color: "--crit" }],
       empty: { title: "Aucune exécution sur 14 jours", text: wfs.length ? "Les workflows surveillés n'ont pas tourné." : `Branche n8n puis lance « Synchroniser maintenant » dans <a href="${Router.href("ops")}" data-nav="ops">Ops n8n</a>.` } });
@@ -1948,14 +2150,14 @@ Views.overview = {
           { key: "sessions", label: "Sessions", r: 1, num: 1, render: (s) => fmt(s.sessions) },
           { key: "dsessions", label: "Δ sess.", r: 1, value: (s) => (num(s.sessions_prev) ? (num(s.sessions) - num(s.sessions_prev)) / num(s.sessions_prev) : null), csv: (s) => (num(s.sessions_prev) ? csvNum((num(s.sessions) - num(s.sessions_prev)) / num(s.sessions_prev), 3) : ""), render: (s) => delta(s.sessions, s.sessions_prev) },
           { key: "pinterest_sessions", label: "Pinterest", r: 1, num: 1, render: (s) => fmt(s.pinterest_sessions) },
-          { key: "spark", label: "Tendance clics", sort: false, csv: false, render: (s) => spark(s.spark, { title: `Clics par jour sur ${d} jours` }) },
+          { key: "spark", label: "Tendance clics", sort: false, csv: false, render: (s) => spark(s.spark, { title: P.single ? `Clics par jour, 28 j jusqu'au ${fmtDay(P.to)}` : `Clics par jour · ${P.custom ? P.short : `${d} jours`}` }) },
           { key: "last_sync_at", label: "Synchro", value: (s) => (s.last_sync_error ? "0" : s.last_sync_at || ""), csv: (s) => s.last_sync_error ? `Erreur : ${s.last_sync_error}` : s.last_sync_at || "",
             render: (s) => (s.last_sync_error ? stateTag("crit", "Erreur", s.last_sync_error) : s.last_sync_at ? `<span class="state ok" title="${esc(fmtAbs(s.last_sync_at))}">${lamp("ok")}${esc(rel(s.last_sync_at))}</span>` : stateTag("", "En attente")) },
         ],
       });
     }
     const untracked = sites.length - tracked.length;
-    $("#ov-sites-note", el).innerHTML = untracked > 0 ? `${plural(untracked, "site détecté", "sites détectés")} mais non ${untracked > 1 ? "suivis" : "suivi"} — active-les dans <a href="${Router.href("settings")}" data-nav="settings">Connexions</a>.` : r.sites.ok && tracked.length ? `Position : moyenne pondérée par les impressions. Les deltas comparent aux ${d} jours précédents.` : "";
+    $("#ov-sites-note", el).innerHTML = untracked > 0 ? `${plural(untracked, "site détecté", "sites détectés")} mais non ${untracked > 1 ? "suivis" : "suivi"} — active-les dans <a href="${Router.href("settings")}" data-nav="settings">Connexions</a>.` : r.sites.ok && tracked.length ? `Position : moyenne pondérée par les impressions. Deltas : ${P.vs}.` : "";
   },
 };
 
@@ -2080,6 +2282,7 @@ Views.seo = {
         <div class="filters">
           <select id="seo-site" aria-label="Site" style="max-width:260px"><option value="">Tous les sites suivis</option></select>
           <div class="seg" id="seo-period" role="group" aria-label="Période">${SEO_PERIODS.map((p) => `<button type="button" data-seo-d="${p.d}" aria-pressed="false" title="${p.d} jours">${p.t}</button>`).join("")}</div>
+          ${Period.ctl()}
           <select id="seo-cmp" aria-label="Comparer avec un autre site" style="max-width:220px"><option value="">Comparer avec…</option></select>
         </div>
       </div>
@@ -2113,7 +2316,7 @@ Views.seo = {
     });
     el.addEventListener("click", (e) => {
       const p = e.target.closest("[data-seo-d]");
-      if (p) { Router.setParams({ d: p.dataset.seoD }); Router.render(); return; }
+      if (p) { Period.drop(); Router.setParams({ d: p.dataset.seoD }); Router.render(); return; }
       const c = e.target.closest("[data-seo-clear]");
       if (c) { const k = c.dataset.seoClear, inp = $(`#seo-${k}-f`, el); if (inp) { inp.value = ""; SEO_drawGsc(el, k); inp.focus(); } }
     });
@@ -2136,7 +2339,9 @@ Views.seo = {
     const d = okD(ctx.params.d) ? Number(ctx.params.d) : okD(lsGet("seo_d")) ? Number(lsGet("seo_d")) : 28;
     lsSet("seo_d", String(d)); /* la période affichée reste la même quand on revient par la navigation */
     $$("#seo-period button", el).forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.seoD) === d)));
-    const to = daysAgo(1), from = daysAgo(d), pfrom = daysAgo(2 * d), pto = daysAgo(d + 1);
+    const P = Period.resolve(ctx.params, d);
+    Period.paint(el, P, "#seo-period");
+    const { from, to, pfrom, pto } = P;
 
     /* 1. Sites suivis (sélecteurs, liaisons GSC/GA4) + rétention (porte des gagnants/perdants). */
     const r0 = await settle({ sites: () => Data.siteOverview(28, { force }), cfg: () => Data.settings({ force }) });
@@ -2175,7 +2380,8 @@ Views.seo = {
     const lead = A && A.label && A.domain && A.label !== A.domain ? `<b>${esc(A.domain)}</b> · ` : !siteId && known ? `<b>${tracked.length ? plural(tracked.length, "site suivi", "sites suivis") : "Aucun site suivi"}</b> · ` : "";
     /* Réglages illisibles : on suppose la rétention par défaut (90 j), mais on le dit (la porte des gagnants et le libellé jour/mois en dépendent). */
     const cfgWarn = r0.cfg.ok ? "" : ` · <span class="t-warn" title="${esc(`Réglages illisibles (${r0.cfg.error?.message || "erreur inconnue"}) : détail quotidien supposé gardé ${ret} jours, la valeur par défaut.`)}">réglages illisibles, rétention supposée à ${ret} j</span>`;
-    $("#seo-sub", el).innerHTML = `${lead}${fd(from)} → ${fd(to)} · comparé à ${fd(pfrom)} → ${fd(pto)} · ${d <= ret ? "requêtes et pages jour par jour" : `requêtes et pages agrégées par mois (au-delà de ${ret} j)`}${cfgWarn}`;
+    const dailyOk = P.custom ? from >= daysAgo(ret) : d <= ret;
+    $("#seo-sub", el).innerHTML = `${lead}${P.single ? `<b>${esc(P.label)}</b> · comparé à la veille · 28 j de contexte sur les courbes` : `${fd(from)} → ${fd(to)} · comparé à ${fd(pfrom)} → ${fd(pto)}`} · ${dailyOk ? "requêtes et pages jour par jour" : `requêtes et pages agrégées par mois (au-delà de ${ret} j)`}${cfgWarn}`;
 
     /* 2. Données : chaque appel est indépendant (un bloc en erreur n'empêche pas les autres). */
     const base = { p_site: siteId, p_from: from, p_to: to };
@@ -2185,7 +2391,10 @@ Views.seo = {
       cmp: () => (cmpOn ? rpc("site_series", { p_site: cmpId, p_from: from, p_to: to }) : Promise.resolve(null)),
       q: () => rpc("top_queries", { ...base, p_limit: 200 }),
       p: () => rpc("top_pages", { ...base, p_limit: 200 }),
-      mv: () => (d <= gate ? rpc("query_movers", { p_site: siteId, p_days: d, p_limit: 8 }) : Promise.resolve(null)),
+      mv: () => (P.custom ? (pfrom >= daysAgo(ret) ? rpc("query_movers_range", { p_site: siteId, p_from: from, p_to: to, p_limit: 8 }) : Promise.resolve(null))
+        : d <= gate ? rpc("query_movers", { p_site: siteId, p_days: d, p_limit: 8 }) : Promise.resolve(null)),
+      chart: () => (P.single ? rpc("site_series", { p_site: siteId, p_from: P.cFrom, p_to: P.cTo }) : Promise.resolve(null)),
+      cmpc: () => (P.single && cmpOn ? rpc("site_series", { p_site: cmpId, p_from: P.cFrom, p_to: P.cTo }) : Promise.resolve(null)),
       ctry: () => rpc("gsc_dims", { ...base, p_dim: "country", p_limit: 10 }),
       dev: () => rpc("gsc_dims", { ...base, p_dim: "device", p_limit: 5 }),
       src: () => rpc("ga4_sources", { ...base, p_limit: 12 }),
@@ -2262,22 +2471,24 @@ Views.seo = {
       [...gscCharts, "seo-sessions"].forEach((id) => { Charts.error(id, r.cur.error); $(`#meta-${id}`, el).textContent = id === "seo-pos" ? "plus bas = mieux" : ""; });
       gscCharts.forEach((id) => SEO_legend(el, id, []));
     } else {
-      const labels = cur.map((x) => x.date);
-      const bRows = cmpOn && r.cmp.ok && Array.isArray(r.cmp.data) ? new Map(r.cmp.data.map((x) => [x.date, x])) : null;
+      const ch = P.single && r.chart.ok ? r.chart.data || [] : cur;
+      const cmpRows = P.single ? r.cmpc : r.cmp;
+      const labels = ch.map((x) => x.date);
+      const bRows = cmpOn && cmpRows.ok && Array.isArray(cmpRows.data) ? new Map(cmpRows.data.map((x) => [x.date, x])) : null;
       const gEmpty = why("gsc"), aEmpty = why("ga4");
       const series = (key, label) => {
-        const s = [{ label: bRows ? aLeg : label, data: cur.map((x) => x[key]), color: "--series-1", fill: !bRows && key !== "avg_position" }];
+        const s = [{ label: bRows ? aLeg : label, data: ch.map((x) => x[key]), color: "--series-1", fill: !bRows && key !== "avg_position" }];
         if (bRows) s.push({ label: bLeg, data: labels.map((k) => bRows.get(k)?.[key] ?? null), color: "--series-3" });
         return s;
       };
       const leg = bRows ? [{ label: aLeg, color: "--series-1" }, { label: bLeg, color: "--series-3" }] : [];
       const cmpErr = cmpOn && !r.cmp.ok ? ` · <span class="t-crit" title="${esc(r.cmp.error?.message || "")}">comparaison indisponible</span>` : "";
       blk("#box-seo-clicks", () => {
-        Charts.line("seo-clicks", { title: "Clics", labels, series: series("clicks", "Clics"), lag: true, empty: gEmpty });
-        $("#meta-seo-clicks", el).innerHTML = m.clicks ? `<span title="Google publie ses données avec 2 à 3 jours de retard : les derniers jours remontent encore.">${fmt(m.clicks)} au total · derniers jours incomplets</span>${cmpErr}` : cmpErr;
+        Charts.line("seo-clicks", { title: "Clics", labels, series: series("clicks", "Clics"), lag: !P.custom, empty: gEmpty });
+        $("#meta-seo-clicks", el).innerHTML = m.clicks ? `<span title="Google publie ses données avec 2 à 3 jours de retard : les derniers jours remontent encore.">${fmt(m.clicks)} ${P.single ? "ce jour-là" : "au total"} · derniers jours incomplets</span>${cmpErr}` : cmpErr;
       });
       blk("#box-seo-impr", () => {
-        Charts.line("seo-impr", { title: "Impressions", labels, series: series("impressions", "Impressions"), lag: true, empty: gEmpty });
+        Charts.line("seo-impr", { title: "Impressions", labels, series: series("impressions", "Impressions"), lag: !P.custom, empty: gEmpty });
         $("#meta-seo-impr", el).innerHTML = m.impr ? `${fmt(m.impr)} au total${cmpErr}` : cmpErr;
       });
       blk("#box-seo-pos", () => {
@@ -2286,7 +2497,7 @@ Views.seo = {
       });
       gscCharts.forEach((id) => SEO_legend(el, id, leg));
       blk("#box-seo-sessions", () => {
-        Charts.line("seo-sessions", { title: "Sessions GA4", labels, series: [{ label: "Toutes sources", data: cur.map((x) => x.sessions), color: "--series-1" }, { label: "Pinterest", data: cur.map((x) => x.pinterest_sessions), color: "--series-2" }], lag: true, empty: aEmpty });
+        Charts.line("seo-sessions", { title: "Sessions GA4", labels, series: [{ label: "Toutes sources", data: ch.map((x) => x.sessions), color: "--series-1" }, { label: "Pinterest", data: ch.map((x) => x.pinterest_sessions), color: "--series-2" }], lag: !P.custom, empty: aEmpty });
         $("#meta-seo-sessions", el).innerHTML = m.sessions ? `${fmt(m.sessions)} sessions · ${fmt(m.pin)} Pinterest${cmpOn ? ` · ${esc(aLeg)} seulement` : ""}` : "";
       });
     }
@@ -2304,11 +2515,11 @@ Views.seo = {
       if (r.mv.data == null) {
         meta.textContent = "";
         const alt = [...SEO_PERIODS].reverse().find((p) => p.d <= gate);
-        box.innerHTML = emptyBox("Période trop longue", gate >= 1 ? `Disponible jusqu'à ${plural(gate, "jour", "jours")} (détail quotidien).` : `Le détail quotidien n'est pas conservé (rétention réglée à ${ret} j dans ${cxLink}).`,
+        box.innerHTML = P.custom ? emptyBox("Détail quotidien indisponible", `Les requêtes jour par jour ne sont gardées que ${ret} jours : choisis une période plus récente.`) : emptyBox("Période trop longue", gate >= 1 ? `Disponible jusqu'à ${plural(gate, "jour", "jours")} (détail quotidien).` : `Le détail quotidien n'est pas conservé (rétention réglée à ${ret} j dans ${cxLink}).`,
           alt ? `<button class="btn sm" type="button" data-seo-d="${alt.d}">Passer à ${alt.t}</button>` : "");
         return;
       }
-      meta.innerHTML = `<span title="Fenêtre jusqu'à aujourd'hui inclus, comparée aux ${d} jours d'avant (les KPI s'arrêtent à J-1).">${d} j vs ${d} j précédents</span>`;
+      meta.innerHTML = P.custom ? `${esc(P.short)} ${esc(P.vs)}` : `<span title="Fenêtre jusqu'à aujourd'hui inclus, comparée aux ${d} jours d'avant (les KPI s'arrêtent à J-1).">${d} j vs ${d} j précédents</span>`;
       const list = r.mv.data || [];
       const win = list.filter((x) => num(x.delta) > 0), lose = list.filter((x) => num(x.delta) < 0);
       if (!win.length && !lose.length) {
@@ -2639,15 +2850,48 @@ function opsServices(el, r) {
   });
 }
 
+/** Calendrier : résumé des exécutions du jour / de la période choisi(e), par workflow. */
+function opsPeriod(el, r, P) {
+  const box = $("#ops-period", el), h2 = $("#ops-ex", el)?.closest(".panel")?.querySelector(".panel-h h2");
+  if (h2) h2.textContent = P.custom ? `Exécutions · ${P.short}` : "Dernières exécutions";
+  if (!P.custom) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  if (!r.ex.ok) { box.innerHTML = panel({ title: `n8n · ${P.label}`, body: errBox(r.ex.error) }); return; }
+  const ex = r.ex.data || [], names = new Map(OpsState.wfs.map((w) => [String(w.id), w.name]));
+  const isOk = (s) => s === "success", isKo = (s) => isFailStatus(s);
+  const by = new Map();
+  ex.forEach((e) => { const k = String(e.workflow_id); const o = by.get(k) || { id: k, name: names.get(k) || k, runs: 0, ok: 0, ko: 0, dur: [], first: null, last: null }; o.runs++; if (isOk(e.status)) o.ok++; if (isKo(e.status)) o.ko++;
+    if (e.started_at && e.stopped_at) o.dur.push((new Date(e.stopped_at) - new Date(e.started_at)) / 1000); if (!o.first || e.started_at < o.first) o.first = e.started_at; if (!o.last || e.started_at > o.last) o.last = e.started_at; by.set(k, o); });
+  const list = [...by.values()], ko = sum(list, "ko");
+  box.innerHTML = panel({ title: `n8n · ${P.label}`, meta: `${fmtFull(ex.length)} exécution(s)${ex.length >= 1000 ? " (1 000 max)" : ""} · gardées 60 jours`, flush: true,
+    body: `<div style="padding:12px 14px 0">${kpis([
+      kpi({ label: "Exécutions", value: fmt(ex.length), sub: P.single ? "ce jour-là" : `${fmtDec(ex.length / P.d)} / jour` }),
+      kpi({ label: "Succès", value: fmt(sum(list, "ok")), sub: ex.length ? pct(sum(list, "ok"), ex.length) : "" }),
+      kpi({ label: "Échecs", value: fmt(ko), tone: ko ? "crit" : "", sub: ko ? list.filter((x) => x.ko).map((x) => x.name).slice(0, 3).join(", ") : "aucun" }),
+      kpi({ label: "Workflows actifs", value: fmt(list.length), sub: "ont tourné sur la période" }),
+    ])}</div><div id="ops-period-tbl"></div>` });
+  mountTable($("#ops-period-tbl", el), { id: "ops-period-tbl", rows: list, sort: { key: "runs", dir: "desc" }, csvName: `n8n-${P.from}-${P.to}`,
+    empty: emptyBox("Aucune exécution sur cette période", ex.length ? "" : "Les exécutions sont gardées 60 jours ; n8n était peut-être injoignable."),
+    cols: [
+      { key: "name", label: "Workflow", render: (x) => `<span class="cell-main">${esc(x.name)}</span>` },
+      { key: "runs", label: "Exécutions", r: 1, num: 1, render: (x) => fmtFull(x.runs) },
+      { key: "ok", label: "Succès", r: 1, num: 1, render: (x) => fmtFull(x.ok) },
+      { key: "ko", label: "Échecs", r: 1, num: 1, cls: (x) => (x.ko ? "t-crit" : "zero"), render: (x) => fmtFull(x.ko) },
+      { key: "avg", label: "Durée moy.", r: 1, num: 1, value: (x) => (x.dur.length ? sum(x.dur, (v) => v) / x.dur.length : null), csv: (x) => (x.dur.length ? Math.round(sum(x.dur, (v) => v) / x.dur.length) : ""),
+        render: (x) => (x.dur.length ? `${fmtDec(sum(x.dur, (v) => v) / x.dur.length)} s` : `<span class="muted">—</span>`) },
+      { key: "first", label: "Première", value: (x) => x.first || "", render: (x) => esc(fmtAbs(x.first)) },
+      { key: "last", label: "Dernière", value: (x) => x.last || "", render: (x) => esc(fmtAbs(x.last)) },
+    ] });
+}
 function opsExecs(el, r) {
   const box = $("#ops-ex", el), meta = $("#ops-ex-meta", el);
   const names = new Map(OpsState.wfs.map((w) => [String(w.id), w.name]));
   const cols = opsExCols(names);
   if (!r.ex.ok) { meta.textContent = ""; mountTable(box, { id: "ops-ex", cols, rows: [], empty: errBox(r.ex.error) }); return; }
   const rows = r.ex.data || [];
-  meta.textContent = rows.length ? `${plural(rows.length, "plus récente", "plus récentes")} · gardées 60 jours` : "";
+  meta.textContent = rows.length ? (Period.custom() ? `${fmtFull(rows.length)} sur la période` : `${plural(rows.length, "plus récente", "plus récentes")} · gardées 60 jours`) : "";
   mountTable(box, {
-    id: "ops-ex", rows, cols, sort: { key: "started_at", dir: "desc" },
+    id: "ops-ex", rows, cols, sort: { key: "started_at", dir: "desc" }, limit: 50, scrollY: true, csvName: "n8n-executions",
     empty: OpsState.wfs.length
       ? emptyBox("Aucune exécution", "Les workflows n'ont pas encore tourné depuis la première synchro. Elles arrivent toutes les 5 min.")
       : emptyBox("Aucune exécution", "Synchronise n8n pour récupérer les exécutions des 7 derniers jours.", `<button class="btn" type="button" data-ops-sync>${icon("sync")}Synchroniser maintenant</button>`),
@@ -2798,10 +3042,11 @@ Views.ops = {
     el.innerHTML = `
       <div class="vh">
         <div><h1>Ops n8n</h1><p class="sub" id="ops-sub">${esc(OPS_SUB_DEFAULT)}</p></div>
-        <div class="filters"><button class="btn" type="button" id="ops-sync" data-ops-sync title="Relit n8n et vérifie les services maintenant (sinon toutes les 5 min)">${icon("sync")}<span>Synchroniser maintenant</span></button></div>
+        <div class="filters">${Period.ctl()}<button class="btn" type="button" id="ops-sync" data-ops-sync title="Relit n8n et vérifie les services maintenant (sinon toutes les 5 min)">${icon("sync")}<span>Synchroniser maintenant</span></button></div>
       </div>
       <div class="stack">
         <div id="ops-config" hidden></div>
+        <div id="ops-period" hidden></div>
         <div id="ops-kpis">${skelKpis(5)}</div>
         ${panel({ id: "ops-alerts-panel", title: "Alertes", meta: `<span id="ops-alerts-meta"></span>`, flush: true,
           body: `<div id="ops-alerts">${skelRows(3)}</div>`,
@@ -2869,13 +3114,16 @@ Views.ops = {
   pause() { return OpsState.pending > 0 || OpsState.syncing; },
   async load(ctx) {
     const el = ctx.el, force = ctx.force;
+    const P = Period.resolve(ctx.params, 7, { end: 0 });
+    Period.paint(el, P);
     const r = await settle({
       st: () => Data.status({ force }),
       wf: () => Data.workflowHealth({ force }),
       alerts: () => Data.openAlerts({ force }),
       resolved: () => Store.get("alerts_resolved", () => rows(sb.from("alerts").select("*").not("resolved_at", "is", null).order("resolved_at", { ascending: false }).limit(5), "alertes résolues"), { force }),
       hc: () => Data.healthChecks({ force }),
-      ex: () => rows(sb.from("n8n_executions").select("*").order("started_at", { ascending: false, nullsFirst: false }).limit(25), "exécutions"),
+      ex: () => (P.custom ? rows(sb.from("n8n_executions").select("*").gte("started_at", Period.bounds(P).gte).lt("started_at", Period.bounds(P).lt).order("started_at", { ascending: false, nullsFirst: false }).limit(1000), "exécutions")
+        : rows(sb.from("n8n_executions").select("*").order("started_at", { ascending: false, nullsFirst: false }).limit(25), "exécutions")),
     });
     if (!ctx.alive()) return;
     OpsState.loaded = true;
@@ -2893,6 +3141,7 @@ Views.ops = {
     opsDrawWf({ load: true });
     opsServices(el, r);
     opsExecs(el, r);
+    opsPeriod(el, r, P);
   },
 };
 
@@ -3004,16 +3253,49 @@ const statusTags = (obj) => {
 /** Ligne d'un tableau par site : retire « — ». */
 const realSites = (list) => (list || []).filter((s) => s && s.site && s.site !== "—");
 
+/** Calendrier : ce qu'a produit le pipeline le jour / la période choisi(e).
+    Séries du Sheet (30 derniers jours) + relevés horaires (pipeline_history) pour les articles publiés. */
+async function pipeDay(el, ctx, d) {
+  const box = $("#pipe-day", el), P = Period.resolve(ctx.params, 30, { end: 0 });
+  Period.paint(el, P);
+  if (!P.custom) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  const days = Array.isArray(d?.days) ? d.days.map((k) => String(k).slice(0, 10)) : [];
+  const idx = days.map((k, i) => (k >= P.from && k <= P.to ? i : -1)).filter((i) => i >= 0);
+  const pick = (arr) => (Array.isArray(arr) ? idx.reduce((a, i) => a + num(arr[i]), 0) : null);
+  const costRows = (Array.isArray(d?.cost?.daily) ? d.cost.daily : []).filter((x) => x && String(x.d).slice(0, 10) >= P.from && String(x.d).slice(0, 10) <= P.to);
+  const inSheet = idx.length > 0;
+  let hist = null, herr = null;
+  try { hist = await Store.get(`pipeline_days:${P.from}:${P.to}`, () => rpc("pipeline_days", { p_from: P.from, p_to: P.to }), { force: ctx.force }); } catch (e) { herr = e; }
+  if (!ctx.alive()) return;
+  const H = (hist || []).filter((x) => x.last_metrics);
+  const g = (m, a, b) => numOrNull(m?.[a]?.[b]);
+  const first = H.length ? H[0].first_metrics : null, last = H.length ? H[H.length - 1].last_metrics : null;
+  const dlt = (a, b) => (first && last && g(last, a, b) != null && g(first, a, b) != null ? g(last, a, b) - g(first, a, b) : null);
+  const dP = (k) => (first && last ? num(last?.pins?.[k]) - num(first?.pins?.[k]) : null);
+  const cost = costRows.reduce((s, x) => s + num(x.a) + num(x.i) + num(x.p), 0);
+  const v = (x) => (x == null ? "—" : fmt(x));
+  box.innerHTML = panel({ title: `Pipeline · ${P.label}`, meta: inSheet ? "séries du Sheet (30 derniers jours) + relevés horaires" : "hors des 30 jours du Sheet : relevés horaires seulement", flush: true,
+    body: `<div style="padding:12px 14px">${kpis([
+      kpi({ label: "Articles générés", value: inSheet ? v(pick(d?.articles?.daily)) : "—", sub: "WF1 (série du Sheet)" }),
+      kpi({ label: "Articles publiés", value: v(dlt("articles", "published")), sub: H.length ? `écart des relevés (${fmtFull(sum(H, "snapshots"))})` : herr ? "relevés illisibles" : "aucun relevé ce jour-là" }),
+      kpi({ label: "Images", value: inSheet ? v(pick(d?.images?.dailyImgs ?? d?.images?.daily)) : "—", sub: "WF2 (série du Sheet)" }),
+      kpi({ label: "Pins générés", value: inSheet ? v(pick(d?.pins?.daily)) : "—", sub: "WF3a (série du Sheet)" }),
+      kpi({ label: "Pins programmés / postés", value: H.length ? v(num(dP("scheduled")) + num(dP("posted"))) : "—", sub: "écart des relevés" }),
+      kpi({ label: "Coût", value: costRows.length ? mad(cost) : "—", sub: costRows.length ? "articles + images + pins" : "pas dans la série du Sheet" }),
+    ])}${herr ? `<p class="hint t-crit">${esc(herr.message || herr)}</p>` : ""}<p class="hint">Les compteurs « publiés » et « programmés » viennent de la différence entre le relevé du Sheet de la veille au soir et celui du soir du jour (un relevé par heure depuis le 25/10).</p></div>` });
+}
 Views.pipeline = {
   title: "Pipeline",
   init(el) {
     el.innerHTML = `
       <div class="vh">
         <div><h1>Pipeline</h1><p class="sub" id="pipe-sub">Articles → images → pins · Google Sheet via Apps Script</p></div>
-        <div class="filters"><button class="btn" type="button" id="pipe-refresh">${icon("sync")}<span>Actualiser depuis le Sheet</span></button></div>
+        <div class="filters">${Period.ctl()}<button class="btn" type="button" id="pipe-refresh">${icon("sync")}<span>Actualiser depuis le Sheet</span></button></div>
       </div>
       <div class="stack">
         <div id="pipe-banner"></div>
+        <div id="pipe-day" hidden></div>
         <div class="banner info small" id="pipe-wait" hidden role="status"></div>
         <div class="seg wide" id="pipe-tabs" role="tablist" aria-label="Sous-onglets du pipeline">${PIPE_TABS.map((t) => `<button type="button" role="tab" data-tab="${t.tab}" aria-selected="false">${esc(t.label)}</button>`).join("")}</div>
         <div id="pipe-body" role="tabpanel"></div>
@@ -3057,6 +3339,7 @@ Views.pipeline = {
     if (!ctx.alive()) return;
     Pipe.row = row; Pipe.data = row?.data || null;
     const d = Pipe.data;
+    pipeDay(el, ctx, d);
     $("#pipe-sub", el).innerHTML = !row ? "Articles → images → pins · Google Sheet via Apps Script"
       : row.ok ? `Sheet lu ${when(row.taken_at)}${row.ms ? ` en ${Math.max(1, Math.round(num(row.ms) / 1000))} s` : ""} · relu automatiquement toutes les 15 min`
       : `Dernière tentative de lecture ${when(row.taken_at)} : <span class="t-crit">échec</span>`;
@@ -5154,6 +5437,7 @@ const v6Short = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "");
 
 /* ═══════════ Indexation ═══════════ */
 const IDX_BUCKETS = [
+  { b: "period", t: "Activité de la période" },
   { b: "not_indexed", t: "Non indexés" }, { b: "unknown", t: "Inconnus de Google" }, { b: "discovered_not_indexed", t: "Découverts, non indexés" },
   { b: "crawled_not_indexed", t: "Explorés, non indexés" }, { b: "pending", t: "Pas encore inspectés" }, { b: "indexed", t: "Indexés" }, { b: "all", t: "Tous" },
 ];
@@ -5162,7 +5446,7 @@ const IDX_LABEL = {
   discovered_not_indexed: ["warn", "Découvert, non indexé"], crawled_not_indexed: ["warn", "Exploré, non indexé"],
   duplicate: ["warn", "Doublon / canonique"], redirect: ["off", "Redirection"], excluded: ["crit", "Exclu (noindex…)"], not_found: ["crit", "Introuvable (404)"], other: ["warn", "Autre"],
 };
-const IdxState = { site: "", bucket: "not_indexed", pending: 0 };
+const IdxState = { site: "", bucket: "not_indexed", pending: 0, P: null, wasCustom: false };
 
 Views.index = {
   title: "Indexation",
@@ -5172,11 +5456,13 @@ Views.index = {
         <div><h1>Indexation</h1><p class="sub" id="idx-sub">Les articles publiés sont-ils dans Google ? Inspection d'URL Search Console</p></div>
         <div class="filters">
           <select id="idx-site" aria-label="Site"><option value="">Tous les sites suivis</option></select>
+          ${Period.ctl()}
           <button class="btn" type="button" id="idx-work" title="Inspecte un lot d'URLs maintenant (sinon toutes les 10 min)">${icon("sync")}<span>Inspecter un lot</span></button>
         </div>
       </div>
       <div class="stack">
         <div id="idx-kpis">${skelKpis(6)}</div>
+        <div id="idx-pkpis" hidden></div>
         <div class="grid g-21">
           ${chartPanel({ id: "idx-tl", title: "Articles indexés par jour", legend: [{ label: "Vus indexés", color: "--series-1" }, { label: "Nouveaux articles suivis", color: "--series-2" }] })}
           ${panel({ title: "Comment lire", body: `<div class="small" style="line-height:1.55">
@@ -5203,7 +5489,7 @@ Views.index = {
     }));
     el.addEventListener("click", (e) => {
       const b = e.target.closest("#idx-buckets [data-bucket]");
-      if (b) { IdxState.bucket = b.dataset.bucket; $$("#idx-buckets [data-bucket]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); idxLoadList(true); return; }
+      if (b) { IdxState.bucket = b.dataset.bucket; IdxState.userBucket = true; $$("#idx-buckets [data-bucket]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); idxLoadList(true); return; }
       const ins = e.target.closest("[data-idx-inspect]");
       if (ins) act(ins, {
         run: () => fn("index-sync", { action: "inspect", url: ins.dataset.idxInspect }),
@@ -5218,10 +5504,20 @@ Views.index = {
   async load(ctx) {
     const el = ctx.el, force = ctx.force;
     IdxState.site = ctx.params.site || "";
+    const P = IdxState.P = Period.resolve(ctx.params, 60, { end: 0, ctx: 30 });
+    Period.paint(el, P);
+    if (P.custom && !IdxState.wasCustom) IdxState.bucket = "period";
+    if (!P.custom && IdxState.bucket === "period") IdxState.bucket = "not_indexed";
+    IdxState.wasCustom = P.custom;
+    const pc = $('#idx-buckets [data-bucket="period"]', el);
+    if (pc) pc.hidden = !P.custom;
+    $$("#idx-buckets [data-bucket]", el).forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.bucket === IdxState.bucket)));
     const r = await settle({
       sites: () => v6Sites({ force }),
       sum: () => Store.get("idx:sum", () => rpc("index_summary"), { force, ttl: 60_000 }),
-      tl: () => Store.get(`idx:tl:${IdxState.site}`, () => rpc("index_timeline", { p_site: IdxState.site || null, p_days: 60 }), { force }),
+      tl: () => (P.custom ? Store.get(`idx:tlr:${IdxState.site}:${P.cFrom}:${P.cTo}`, () => rpc("index_timeline_range", { p_site: IdxState.site || null, p_from: P.cFrom, p_to: P.cTo }), { force })
+        : Store.get(`idx:tl:${IdxState.site}`, () => rpc("index_timeline", { p_site: IdxState.site || null, p_days: 60 }), { force })),
+      ptl: () => (P.custom ? Store.get(`idx:ptl:${IdxState.site}:${P.from}:${P.to}`, () => rpc("index_timeline_range", { p_site: IdxState.site || null, p_from: P.from, p_to: P.to }), { force }) : Promise.resolve(null)),
     });
     if (!ctx.alive()) return;
     const sel = $("#idx-site", el);
@@ -5244,6 +5540,18 @@ Views.index = {
     ]);
     $("#idx-sub", el).innerHTML = total ? `<b>${fmtFull(total)}</b> articles publiés · ${fmtFull(T("inspected_today"))} inspection(s) aujourd'hui${rowsSel.length ? ` · dernière ${when(rowsSel.map((s) => s.last_inspected_at).filter(Boolean).sort().pop())}` : ""}` : "Les articles publiés sont-ils dans Google ? Inspection d'URL Search Console";
 
+    const pk = $("#idx-pkpis", el);
+    if (!P.custom) { pk.hidden = true; pk.innerHTML = ""; }
+    else if (!r.ptl.ok) { pk.hidden = false; pk.innerHTML = errBox(r.ptl.error); }
+    else {
+      const t = r.ptl.data || [];
+      pk.hidden = false;
+      pk.innerHTML = `<div class="section-title pday-k">${esc(P.single ? `Le ${P.label}` : `Du ${P.short}`)}</div>` + kpis([
+        kpi({ label: "Nouveaux articles suivis", value: fmt(sum(t, "seen")), sub: "vus pour la 1re fois" }),
+        kpi({ label: "Vus indexés", value: fmt(sum(t, "indexed")), sub: "1re détection dans Google" }),
+        kpi({ label: "Inspections", value: fmt(sum(t, "inspected")), sub: "dernière inspection ce jour-là" }),
+      ]) + `<p class="hint">Liste détaillée : onglet « Activité de la période » des URLs ci-dessous.</p>`;
+    }
     if (!r.tl.ok) Charts.error("idx-tl", r.tl.error);
     else {
       const tl = r.tl.data || [];
@@ -5283,7 +5591,10 @@ async function idxLoadList(force) {
   const el = $('main.main > section[data-view="index"]'); if (!el) return;
   const box = $("#idx-list", el);
   try {
-    idxRows = await Store.get(`idx:list:${IdxState.site}:${IdxState.bucket}`, () => rpc("index_list", { p_site: IdxState.site || null, p_bucket: IdxState.bucket, p_limit: 1000 }), { force });
+    const P = IdxState.P;
+    idxRows = IdxState.bucket === "period" && P?.custom
+      ? await Store.get(`idx:listr:${IdxState.site}:${P.from}:${P.to}`, () => rpc("index_list_range", { p_site: IdxState.site || null, p_from: P.from, p_to: P.to, p_limit: 1000 }), { force })
+      : await Store.get(`idx:list:${IdxState.site}:${IdxState.bucket === "period" ? "not_indexed" : IdxState.bucket}`, () => rpc("index_list", { p_site: IdxState.site || null, p_bucket: IdxState.bucket === "period" ? "not_indexed" : IdxState.bucket, p_limit: 1000 }), { force });
     idxDrawList();
   } catch (e) { box.innerHTML = errBox(e); }
 }
@@ -5299,7 +5610,7 @@ function idxDrawList() {
       { key: "url", label: "Article", value: (r) => r.url, csv: (r) => r.url,
         render: (r) => `<a class="cell-main trunc" style="max-width:420px" href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.url)}">${esc(v6Short(r.url))}</a>${r.keyword ? `<span class="cell-sub">${esc(r.keyword)}</span>` : ""}` },
       { key: "bucket", label: "État", value: (r) => r.bucket, csv: (r) => r.coverage_state || r.bucket,
-        render: (r) => { const [t, l] = IDX_LABEL[r.bucket] || ["off", r.bucket]; return `${stateTag(t, l, r.coverage_state || "")}${r.coverage_state && r.verdict !== "IMPRESSIONS" ? `<span class="cell-sub">${esc(r.coverage_state)}</span>` : r.verdict === "IMPRESSIONS" ? `<span class="cell-sub">déduit des impressions GSC</span>` : ""}${r.error ? `<span class="cell-sub t-crit" title="${esc(r.error)}">${esc(String(r.error).slice(0, 70))}</span>` : ""}`; } },
+        render: (r) => { const [t, l] = IDX_LABEL[r.bucket] || ["off", r.bucket]; return `${stateTag(t, l, r.coverage_state || "")}${r.coverage_state && r.verdict !== "IMPRESSIONS" ? `<span class="cell-sub">${esc(r.coverage_state)}</span>` : r.verdict === "IMPRESSIONS" ? `<span class="cell-sub">déduit des impressions GSC</span>` : ""}${r.error ? `<span class="cell-sub t-crit" title="${esc(r.error)}">${esc(String(r.error).slice(0, 70))}</span>` : ""}${r.event ? `<span class="cell-sub"><b>${esc(r.event)}</b></span>` : ""}`; } },
       { key: "first_seen_at", label: "Suivi depuis", value: (r) => r.first_seen_at || "", render: (r) => when(r.first_seen_at) },
       { key: "last_crawl_at", label: "Dernière exploration", value: (r) => r.last_crawl_at || "", render: (r) => when(r.last_crawl_at) },
       { key: "last_inspected_at", label: "Inspecté", value: (r) => r.last_inspected_at || "", render: (r) => when(r.last_inspected_at) },
@@ -5325,6 +5636,7 @@ Views.pinterest = {
         <div class="filters">
           <select id="pin-site" aria-label="Site"><option value="">Tous les comptes</option></select>
           <div class="seg" id="pin-period" role="group" aria-label="Période">${PIN_PERIODS.map((p) => `<button type="button" data-d="${p.d}" aria-pressed="${p.d === PinState.days}">${p.t}</button>`).join("")}</div>
+          ${Period.ctl()}
           <button class="btn" type="button" id="pin-sync" title="Relit Blotato maintenant (≈ 2 min)">${icon("sync")}<span>Synchroniser Blotato</span></button>
         </div>
       </div>
@@ -5353,7 +5665,7 @@ Views.pinterest = {
     $("#pin-site", el).addEventListener("change", (e) => { PinState.site = e.target.value; Router.setParams({ site: PinState.site }); Router.render({ silent: true }); });
     $("#pin-period", el).addEventListener("click", (e) => {
       const b = e.target.closest("button[data-d]"); if (!b) return;
-      PinState.days = Number(b.dataset.d); lsSet("pin_days", String(PinState.days));
+      PinState.days = Number(b.dataset.d); lsSet("pin_days", String(PinState.days)); Period.drop();
       $$("#pin-period button", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       Router.render({ silent: true });
     });
@@ -5371,13 +5683,20 @@ Views.pinterest = {
     const el = ctx.el, force = ctx.force, days = PinState.days;
     PinState.site = ctx.params.site || "";
     const site = PinState.site || null;
+    const P = Period.resolve(ctx.params, days, { end: 0, ctx: 30 });
+    Period.paint(el, P, "#pin-period");
+    if (!P.custom) $$("#pin-period button", el).forEach((x) => x.setAttribute("aria-pressed", String(Number(x.dataset.d) === days)));
+    const pLbl = P.custom ? P.short : `${days} j`;
     const r = await settle({
-      stats: () => Store.get(`pin:stats:${days}`, () => rpc("blotato_site_stats", { p_days: days }), { force }),
-      cal: () => Store.get(`pin:cal:${days}`, () => rpc("blotato_calendar", { p_past: days, p_next: 0 }), { force }),
+      stats: () => (P.custom ? Store.get(`pin:statsr:${P.from}:${P.to}`, () => rpc("blotato_site_stats_range", { p_from: P.from, p_to: P.to }), { force })
+        : Store.get(`pin:stats:${days}`, () => rpc("blotato_site_stats", { p_days: days }), { force })),
+      cal: () => (P.custom ? Store.get(`pin:calr:${P.cFrom}:${P.cTo}`, () => rpc("blotato_calendar_range", { p_from: P.cFrom, p_to: P.cTo }), { force })
+        : Store.get(`pin:cal:${days}`, () => rpc("blotato_calendar", { p_past: days, p_next: 0 }), { force })),
       rec: () => Store.get("pin:rec", () => rpc("blotato_reconcile", { p_next: 14 }), { force }),
       fail: () => Store.get("pin:fail", () => rows(sb.from("blotato_failed").select("*").order("post_time", { ascending: false }).limit(200), "échecs Blotato"), { force }),
       sched: () => Store.get("pin:sched", () => rows(sb.from("blotato_schedules").select("*").order("scheduled_at").limit(2000), "programmés Blotato"), { force }),
-      top: () => Store.get(`pin:top:${site}:${days}:${PinState.order}`, () => rpc("blotato_top_pins", { p_site: site, p_days: Math.max(days, 30), p_order: PinState.order, p_limit: 100 }), { force }),
+      top: () => (P.custom ? Store.get(`pin:topr:${site}:${P.from}:${P.to}:${PinState.order}`, () => rpc("blotato_top_pins_range", { p_site: site, p_from: P.from, p_to: P.to, p_order: PinState.order, p_limit: 100 }), { force })
+        : Store.get(`pin:top:${site}:${days}:${PinState.order}`, () => rpc("blotato_top_pins", { p_site: site, p_days: Math.max(days, 30), p_order: PinState.order, p_limit: 100 }), { force })),
       art: () => Store.get(`pin:art:${site}`, () => rpc("blotato_article_stats", { p_site: site, p_limit: 200 }), { force }),
       alerts: () => Data.openAlerts({ force }),
       status: () => Store.get("pin:status", () => fn("blotato", { action: "status" }), { force, ttl: 5 * 60_000 }),
@@ -5408,10 +5727,10 @@ Views.pinterest = {
     if (!r.stats.ok) $("#pin-kpis", el).innerHTML = errBox(r.stats.error);
     else if (!stats.length) $("#pin-kpis", el).innerHTML = emptyBox("Aucun compte Blotato synchronisé", "Ajoute BLOTATO_API_KEY puis lance une synchro.");
     else $("#pin-kpis", el).innerHTML = kpis([
-      kpi({ label: `Publiés · ${days} j`, value: fmt(sum(S, "published")), sub: `${fmtDec(sum(S, "published") / days)} / jour` }),
+      kpi({ label: `Publiés · ${pLbl}`, value: fmt(sum(S, "published")), sub: P.single ? "ce jour-là" : `${fmtDec(sum(S, "published") / P.d)} / jour` }),
       kpi({ label: "Échecs", value: fmt(sum(S, "failed")), tone: sum(S, "failed") ? "crit" : "", sub: "chez Blotato" }),
       kpi({ label: "Programmés · 7 j", value: fmt(sum(S, "scheduled_next7")), sub: `${fmtFull(PinState.site ? (r.sched.ok ? r.sched.data.filter(f).length : 0) : (r.sched.ok ? r.sched.data.length : 0))} au total` }),
-      kpi({ label: "Impressions", value: fmt(impr), sub: "pins publiés sur la période" }),
+      kpi({ label: "Impressions", value: fmt(impr), sub: P.single ? "des pins publiés ce jour-là" : "pins publiés sur la période" }),
       kpi({ label: "Clics", value: fmt(clicks), sub: impr ? `CTR ${fmtPct(clicks / impr, 2)}` : "" }),
       kpi({ label: "Enregistrements", value: fmt(sum(S, "saves")), sub: `${fmt(sum(S, "pin_clicks"))} clics sur l'épingle` }),
     ]);
@@ -5429,8 +5748,9 @@ Views.pinterest = {
     }
 
     /* Échecs */
-    const fails = (r.fail.ok ? r.fail.data : []).filter(f);
-    $("#pin-fail-meta", el).textContent = fails.length ? `${fmtFull(fails.length)} sur 14 j` : "";
+    const fb = P.custom ? Period.bounds(P) : null;
+    const fails = (r.fail.ok ? r.fail.data : []).filter(f).filter((x) => !fb || (x.post_time >= fb.gte && x.post_time < fb.lt));
+    $("#pin-fail-meta", el).textContent = fails.length ? `${fmtFull(fails.length)} · ${P.custom ? P.short : "14 j"}` : P.custom ? `aucun · ${P.short}` : "";
     if (!r.fail.ok) $("#pin-fail", el).innerHTML = errBox(r.fail.error);
     else mountTable($("#pin-fail", el), {
       id: "pin-fail", rows: fails, limit: 30, scrollY: true, empty: `<div class="empty">${stateTag("ok", "Aucun échec")}<div>sur les 14 derniers jours</div></div>`,
@@ -5447,7 +5767,7 @@ Views.pinterest = {
     /* Par compte */
     if (!r.stats.ok) $("#pin-acc", el).innerHTML = errBox(r.stats.error);
     else {
-      $("#pin-acc-meta", el).textContent = `${days} derniers jours`;
+      $("#pin-acc-meta", el).textContent = P.custom ? P.label : `${days} derniers jours`;
       mountTable($("#pin-acc", el), {
         id: "pin-acc", rows: S, sort: { key: "published", dir: "desc" }, csvName: "pinterest-comptes",
         onRow: (s) => { if (s.site) { PinState.site = s.site; Router.setParams({ site: s.site }); Router.render({ silent: true }); } },
@@ -5480,7 +5800,7 @@ Views.pinterest = {
       { key: "saves", label: "Enreg.", r: 1, num: 1, value: (p) => numOrNull(p.saves), render: (p) => fmt(p.saves) },
     ];
     if (!r.top.ok) $("#pin-top", el).innerHTML = errBox(r.top.error);
-    else { $("#pin-top-meta", el).textContent = `${Math.max(days, 30)} derniers jours`; mountTable($("#pin-top", el), { id: "pin-top", rows: r.top.data || [], limit: 25, scrollY: true, csvName: "pinterest-top-pins", cols: pinCols(), empty: emptyBox("Pas encore de stats", "Les stats arrivent avec les pins publiés via Blotato.") }); }
+    else { $("#pin-top-meta", el).textContent = P.custom ? `publiés · ${P.label}` : `${Math.max(days, 30)} derniers jours`; mountTable($("#pin-top", el), { id: "pin-top", rows: r.top.data || [], limit: 25, scrollY: true, csvName: "pinterest-top-pins", cols: pinCols(), empty: emptyBox("Pas encore de stats", "Les stats arrivent avec les pins publiés via Blotato.") }); }
     if (!r.art.ok) $("#pin-art", el).innerHTML = errBox(r.art.error);
     else mountTable($("#pin-art", el), {
       id: "pin-art", rows: r.art.data || [], limit: 25, scrollY: true, csvName: "pinterest-par-article", sort: { key: "clicks", dir: "desc" },
@@ -5751,6 +6071,7 @@ Agent.mount();
 Health.bind();
 Health.paint({ alertCount: 0 });
 Commands.bind();
+Period.bind();
 Auth.bindLogin();
 $("#kbd-hint").textContent = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘ K" : "Ctrl K";
 $$("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => Theme.toggle()));
