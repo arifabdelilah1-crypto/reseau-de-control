@@ -205,7 +205,7 @@ main.main { min-width: 0; padding: 22px 28px 64px; max-width: 1480px; width: 100
   .mtop .mfeux { display: flex; gap: 2px; margin-left: auto; }
   .mtop .mfeux button { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: none; padding: 4px 4px; min-width: 32px; min-height: 44px; font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: .04em; }
   .mnav {
-    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(7, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
     height: calc(var(--bottom-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface); border-top: 1px solid var(--line);
   }
@@ -595,6 +595,38 @@ section[data-view="settings"] .kv .state { white-space: normal; overflow-wrap: a
 .cal th.c.we { color: var(--ink); background: var(--surface-2); }
 input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--crit); }
 
+/* ═══════════ v6 : Indexation · Pinterest · Assistant ═══════════ */
+.agent-fab { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink); color: var(--surface); font-weight: 600; font-size: 13.5px; cursor: pointer; box-shadow: var(--shadow-pop); }
+.agent-fab svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+body:not(:has(#app:not([hidden]))) .agent-fab { display: none; }
+.agent { position: fixed; right: 16px; bottom: 16px; top: 16px; z-index: 41; width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
+.agent[hidden] { display: none; }
+.agent-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.agent-h > .small { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.am { max-width: 92%; padding: 9px 12px; border-radius: var(--radius); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.am.u { align-self: flex-end; background: var(--ink); color: var(--surface); white-space: pre-wrap; }
+.am.a { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); }
+.am p + p, .am p + ul, .am ul + p { margin-top: 6px; }
+.am ul { padding-left: 18px; }
+.am code { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; }
+.am .tbl-wrap { margin: 6px 0; max-width: 100%; overflow-x: auto; }
+.am .tbl { font-size: 12px; }
+.am.busy { display: flex; align-items: center; gap: 8px; color: var(--ink-3); }
+.am .prop { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); }
+.am .prop code { display: block; margin-top: 3px; color: var(--ink-3); word-break: break-all; }
+.am .steps { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.agent-sugg { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.agent-sugg:empty { display: none; }
+.agent-f { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.agent-f textarea { flex: 1; resize: none; font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
+.agent-f .btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+@media (max-width: 760px) {
+  .agent-fab { bottom: 64px; right: 12px; padding: 10px 12px; }
+  .agent-fab span { display: none; }
+  .agent { inset: 0; width: auto; border-radius: 0; z-index: 50; }
+}
+
 /* Démarrage */
 .boot-card { width: min(360px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .boot-card p { padding: 14px 22px 16px; color: var(--ink-3); font-size: 13.5px; }
@@ -618,6 +650,11 @@ input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--cr
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></symbol>
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 10h17M3.5 14.5h17M9.5 5v14"/></symbol>
   <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5 11 13M18 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H10"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21v-6.5"/><path d="M8 3.5h8l-1.3 5.2 3.3 3.3v2.5H6V12l3.3-3.3z"/></symbol>
+  <symbol id="i-index" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9 13.2l2.2 2.2 4-4.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10h-8L7 19.5v-4H4.5z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-5.5 16-3-6.5zM11.5 13.5 20 4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
@@ -5092,8 +5129,625 @@ Views.settings = {
   },
 };
 
+/* ═══════════ v6 : Indexation · Pinterest (Blotato) · Agent · Connecteur Claude ═══════════ */
+
+/* Navigation : Indexation après SEO, Pinterest après Pipeline. */
+NAV.splice(NAV.findIndex((n) => n.view === "seo") + 1, 0, { view: "index", label: "Indexation", short: "Index", icon: "index" });
+NAV.splice(NAV.findIndex((n) => n.view === "pipeline") + 1, 0, { view: "pinterest", label: "Pinterest", short: "Pins", icon: "pin" });
+Object.assign(ALERT_KINDS, {
+  index_stale: { label: "Indexation", view: "index" },
+  blotato_api: { label: "Blotato", view: "pinterest" },
+  blotato_failed: { label: "Pins en échec", view: "pinterest" },
+  blotato_gap: { label: "Pinterest", view: "pinterest" },
+});
+(() => {
+  const main = $("main.main"), ref = (v) => $(`main.main > section[data-view="${v}"]`);
+  const mk = (v) => { const s = document.createElement("section"); s.dataset.view = v; s.hidden = true; return s; };
+  main.insertBefore(mk("index"), ref("ops"));
+  main.insertBefore(mk("pinterest"), ref("settings"));
+})();
+
+/* Liste des sites suivis (sélecteurs). */
+const v6Sites = (o) => Data.sites(o).then((list) => (list || []).filter((s) => s.tracked));
+const v6SlugOf = (domain, accounts) => Object.keys(accounts || {}).find((k) => String(domain || "").startsWith(k)) || null;
+const v6Short = (u) => String(u || "").replace(/^https?:\/\/(www\.)?/, "");
+
+/* ═══════════ Indexation ═══════════ */
+const IDX_BUCKETS = [
+  { b: "not_indexed", t: "Non indexés" }, { b: "unknown", t: "Inconnus de Google" }, { b: "discovered_not_indexed", t: "Découverts, non indexés" },
+  { b: "crawled_not_indexed", t: "Explorés, non indexés" }, { b: "pending", t: "Pas encore inspectés" }, { b: "indexed", t: "Indexés" }, { b: "all", t: "Tous" },
+];
+const IDX_LABEL = {
+  indexed: ["ok", "Indexé"], pending: ["off", "À inspecter"], unknown: ["crit", "Inconnu de Google"],
+  discovered_not_indexed: ["warn", "Découvert, non indexé"], crawled_not_indexed: ["warn", "Exploré, non indexé"],
+  duplicate: ["warn", "Doublon / canonique"], redirect: ["off", "Redirection"], excluded: ["crit", "Exclu (noindex…)"], not_found: ["crit", "Introuvable (404)"], other: ["warn", "Autre"],
+};
+const IdxState = { site: "", bucket: "not_indexed", pending: 0 };
+
+Views.index = {
+  title: "Indexation",
+  init(el) {
+    el.innerHTML = `
+      <div class="vh">
+        <div><h1>Indexation</h1><p class="sub" id="idx-sub">Les articles publiés sont-ils dans Google ? Inspection d'URL Search Console</p></div>
+        <div class="filters">
+          <select id="idx-site" aria-label="Site"><option value="">Tous les sites suivis</option></select>
+          <button class="btn" type="button" id="idx-work" title="Inspecte un lot d'URLs maintenant (sinon toutes les 10 min)">${icon("sync")}<span>Inspecter un lot</span></button>
+        </div>
+      </div>
+      <div class="stack">
+        <div id="idx-kpis">${skelKpis(6)}</div>
+        <div class="grid g-21">
+          ${chartPanel({ id: "idx-tl", title: "Articles indexés par jour", legend: [{ label: "Vus indexés", color: "--series-1" }, { label: "Nouveaux articles suivis", color: "--series-2" }] })}
+          ${panel({ title: "Comment lire", body: `<div class="small" style="line-height:1.55">
+            <p><b>Inconnu de Google</b> : Google n'a jamais vu l'URL. Vérifie le sitemap et les liens internes vers l'article.</p>
+            <p style="margin-top:8px"><b>Découvert, non indexé</b> : URL connue mais pas encore explorée. Souvent un manque de « budget » ou de liens.</p>
+            <p style="margin-top:8px"><b>Exploré, non indexé</b> : Google a lu la page et ne l'a pas retenue. C'est un signal de qualité ou de contenu trop proche d'une autre page.</p>
+            <p style="margin-top:8px">L'API Google ne permet pas de « Demander l'indexation » : utilise le lien <b>Search Console</b> de chaque URL.</p></div>` })}
+        </div>
+        ${panel({ title: "Par site", meta: `<span id="idx-sites-meta"></span>`, flush: true, tools: csvBtn("idx-sites"), body: `<div id="idx-sites">${skelRows(8)}</div>`,
+          note: "Quota Google : 2 000 inspections / jour / propriété. Le worker en fait au plus « index_daily_per_site » par site et par jour (Réglages). Un article indexé est revérifié tous les 30 jours, un non indexé tous les 2 jours." })}
+        ${panel({ title: "URLs", meta: `<span id="idx-list-meta"></span>`, flush: true,
+          tools: `<input type="search" class="sm" id="idx-q" placeholder="Filtrer URL ou mot-clé" aria-label="Filtrer les URLs" autocomplete="off" style="width:180px">${csvBtn("idx-list")}`,
+          body: `<div class="chips" id="idx-buckets" style="padding:10px 14px;border-bottom:1px solid var(--line)">${IDX_BUCKETS.map((x) => `<button type="button" class="chip" data-bucket="${x.b}" aria-pressed="${x.b === IdxState.bucket}">${esc(x.t)}</button>`).join("")}</div><div id="idx-list">${skelRows(10)}</div>` })}
+      </div>`;
+    $("#idx-site", el).addEventListener("change", (e) => { IdxState.site = e.target.value; Router.setParams({ site: IdxState.site }); Router.render({ silent: true }); });
+    $("#idx-q", el).addEventListener("input", () => idxDrawList());
+    $("#idx-work", el).addEventListener("click", (e) => act(e.currentTarget, {
+      confirm: { title: "Inspecter un lot maintenant ?", body: "Environ 30 à 60 URLs en 100 secondes, dans la limite du quota journalier par site.", ok: "Inspecter" },
+      run: () => fn("index-sync", { action: "work" }),
+      bad: (r) => !r || (r.done === 0 && r.failed > 0),
+      ok: (r) => `${fmtFull(r.done)} URL(s) inspectée(s)${r.failed ? `, ${r.failed} en erreur` : ""}${r.seed?.added ? ` · ${r.seed.added} nouvelle(s) URL(s)` : ""}`,
+      fail: (r) => r?.errors?.[0] || "Aucune URL inspectée",
+      after: () => { Store.drop("idx"); Router.render({ silent: true, force: true }); },
+    }));
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("#idx-buckets [data-bucket]");
+      if (b) { IdxState.bucket = b.dataset.bucket; $$("#idx-buckets [data-bucket]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); idxLoadList(true); return; }
+      const ins = e.target.closest("[data-idx-inspect]");
+      if (ins) act(ins, {
+        run: () => fn("index-sync", { action: "inspect", url: ins.dataset.idxInspect }),
+        bad: (r) => !r?.ok,
+        ok: (r) => `${r.verdict === "PASS" ? "Indexé" : "Non indexé"}${r.coverage_state ? " : " + r.coverage_state : ""}`,
+        fail: (r) => r?.error || "Inspection impossible",
+        after: () => { Store.drop("idx"); idxLoadList(true); },
+      });
+    });
+  },
+  pause() { return IdxState.pending > 0; },
+  async load(ctx) {
+    const el = ctx.el, force = ctx.force;
+    IdxState.site = ctx.params.site || "";
+    const r = await settle({
+      sites: () => v6Sites({ force }),
+      sum: () => Store.get("idx:sum", () => rpc("index_summary"), { force, ttl: 60_000 }),
+      tl: () => Store.get(`idx:tl:${IdxState.site}`, () => rpc("index_timeline", { p_site: IdxState.site || null, p_days: 60 }), { force }),
+    });
+    if (!ctx.alive()) return;
+    const sel = $("#idx-site", el);
+    if (r.sites.ok) sel.innerHTML = `<option value="">Tous les sites suivis</option>` + r.sites.data.map((s) => `<option value="${esc(s.id)}"${s.id === IdxState.site ? " selected" : ""}>${esc(s.label || s.domain)}</option>`).join("");
+    const all = r.sum.ok ? r.sum.data || [] : [];
+    const rowsSel = IdxState.site ? all.filter((s) => s.site_id === IdxState.site) : all;
+    const T = (k) => sum(rowsSel, k);
+    const total = T("total"), indexed = T("indexed"), pending = T("pending"), unknown = T("unknown");
+    const notIdx = total - indexed - pending;
+    const inspected = total - pending;
+    if (!r.sum.ok) $("#idx-kpis", el).innerHTML = errBox(r.sum.error);
+    else if (!total) $("#idx-kpis", el).innerHTML = emptyBox("Aucune URL suivie pour l'instant", "Les articles publiés du Sheet (Pipeline) sont ajoutés automatiquement toutes les 10 min. Vérifie que le Pipeline est lu.");
+    else $("#idx-kpis", el).innerHTML = kpis([
+      kpi({ label: "Articles publiés suivis", value: fmt(total), sub: `${fmtFull(inspected)} inspectés` }),
+      kpi({ label: "Indexés", value: fmt(indexed), sub: inspected ? `${pct(indexed, inspected)} des inspectés` : "", tone: indexed ? "" : "warn" }),
+      kpi({ label: "Non indexés", value: fmt(notIdx), sub: inspected ? `${pct(notIdx, inspected)} des inspectés` : "", tone: notIdx ? "crit" : "" }),
+      kpi({ label: "Inconnus de Google", value: fmt(unknown), sub: "jamais vus par Google", tone: unknown ? "crit" : "" }),
+      kpi({ label: "Pas encore inspectés", value: fmt(pending), sub: pending ? "le worker avance toutes les 10 min" : "tout est inspecté" }),
+      kpi({ label: "Non indexés > 14 j", value: fmt(T("stale_not_indexed")), sub: "depuis leur 1re détection", tone: T("stale_not_indexed") ? "warn" : "" }),
+    ]);
+    $("#idx-sub", el).innerHTML = total ? `<b>${fmtFull(total)}</b> articles publiés · ${fmtFull(T("inspected_today"))} inspection(s) aujourd'hui${rowsSel.length ? ` · dernière ${when(rowsSel.map((s) => s.last_inspected_at).filter(Boolean).sort().pop())}` : ""}` : "Les articles publiés sont-ils dans Google ? Inspection d'URL Search Console";
+
+    if (!r.tl.ok) Charts.error("idx-tl", r.tl.error);
+    else {
+      const tl = r.tl.data || [];
+      Charts.line("idx-tl", { title: "Indexation", labels: tl.map((x) => x.date), series: [
+        { label: "Vus indexés", data: tl.map((x) => x.indexed), color: "--series-1" },
+        { label: "Nouveaux articles suivis", data: tl.map((x) => x.seen), color: "--series-2" }],
+        empty: { title: "Pas encore d'historique", text: "La courbe se remplit au fil des inspections." } });
+    }
+
+    const box = $("#idx-sites", el);
+    if (!r.sum.ok) box.innerHTML = errBox(r.sum.error);
+    else mountTable(box, {
+      id: "idx-sites", rows: all, sort: { key: "rate", dir: "asc" }, csvName: "indexation-sites",
+      onRow: (s) => { IdxState.site = s.site_id; Router.setParams({ site: s.site_id }); Router.render({ silent: true }); },
+      rowTitle: () => "Filtrer sur ce site",
+      cols: [
+        { key: "domain", label: "Site", render: (s) => `<span class="cell-main">${esc(s.domain)}</span>` },
+        { key: "total", label: "Suivis", r: 1, num: 1, value: (s) => num(s.total), render: (s) => fmtFull(s.total) },
+        { key: "rate", label: "Indexés", r: 1, num: 1, value: (s) => { const i = num(s.total) - num(s.pending); return i ? num(s.indexed) / i : null; },
+          csv: (s) => num(s.indexed), render: (s) => { const i = num(s.total) - num(s.pending); return `<b>${fmtFull(s.indexed)}</b> <span class="muted small">${i ? pct(s.indexed, i) : "—"}</span>`; } },
+        { key: "unknown", label: "Inconnus", r: 1, num: 1, cls: (s) => (num(s.unknown) ? "t-crit" : "zero"), value: (s) => num(s.unknown), render: (s) => fmtFull(s.unknown) },
+        { key: "discovered_not_indexed", label: "Découverts", r: 1, num: 1, value: (s) => num(s.discovered_not_indexed), render: (s) => fmtFull(s.discovered_not_indexed) },
+        { key: "crawled_not_indexed", label: "Explorés", r: 1, num: 1, value: (s) => num(s.crawled_not_indexed), render: (s) => fmtFull(s.crawled_not_indexed) },
+        { key: "excluded", label: "Exclus", r: 1, num: 1, value: (s) => num(s.excluded) + num(s.other), render: (s) => fmtFull(num(s.excluded) + num(s.other)) },
+        { key: "pending", label: "À inspecter", r: 1, num: 1, value: (s) => num(s.pending), render: (s) => (num(s.pending) ? fmtFull(s.pending) : `<span class="muted">0</span>`) },
+        { key: "stale_not_indexed", label: "> 14 j", r: 1, num: 1, cls: (s) => (num(s.stale_not_indexed) ? "t-crit" : "zero"), value: (s) => num(s.stale_not_indexed), render: (s) => fmtFull(s.stale_not_indexed) },
+        { key: "median_days_to_index", label: "Délai médian", r: 1, num: 1, value: (s) => numOrNull(s.median_days_to_index), render: (s) => (numOrNull(s.median_days_to_index) == null ? `<span class="muted">—</span>` : `${fmtDec(s.median_days_to_index)} j`) },
+        { key: "last_inspected_at", label: "Inspecté", value: (s) => s.last_inspected_at || "", render: (s) => when(s.last_inspected_at) },
+      ],
+    });
+    $("#idx-sites-meta", el).textContent = all.length ? `${plural(all.length, "site", "sites")}${IdxState.site ? " · clic sur une ligne = filtrer" : " · clic = filtrer"}` : "";
+    await idxLoadList(force);
+  },
+};
+let idxRows = [];
+async function idxLoadList(force) {
+  const el = $('main.main > section[data-view="index"]'); if (!el) return;
+  const box = $("#idx-list", el);
+  try {
+    idxRows = await Store.get(`idx:list:${IdxState.site}:${IdxState.bucket}`, () => rpc("index_list", { p_site: IdxState.site || null, p_bucket: IdxState.bucket, p_limit: 1000 }), { force });
+    idxDrawList();
+  } catch (e) { box.innerHTML = errBox(e); }
+}
+function idxDrawList() {
+  const el = $('main.main > section[data-view="index"]'); if (!el) return;
+  const q = ($("#idx-q", el)?.value || "").toLowerCase().trim();
+  const list = q ? idxRows.filter((r) => `${r.url} ${r.keyword || ""}`.toLowerCase().includes(q)) : idxRows;
+  $("#idx-list-meta", el).textContent = `${fmtFull(list.length)} URL(s)${idxRows.length >= 1000 ? " (1 000 max)" : ""}`;
+  mountTable($("#idx-list", el), {
+    id: "idx-list", rows: list, limit: 50, scrollY: true, csvName: "indexation-urls", sort: { key: "first_seen_at", dir: "desc" },
+    empty: emptyBox("Aucune URL dans cet état", IdxState.bucket === "not_indexed" ? "Bonne nouvelle, ou pas encore inspecté : regarde « Pas encore inspectés »." : ""),
+    cols: [
+      { key: "url", label: "Article", value: (r) => r.url, csv: (r) => r.url,
+        render: (r) => `<a class="cell-main trunc" style="max-width:420px" href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.url)}">${esc(v6Short(r.url))}</a>${r.keyword ? `<span class="cell-sub">${esc(r.keyword)}</span>` : ""}` },
+      { key: "bucket", label: "État", value: (r) => r.bucket, csv: (r) => r.coverage_state || r.bucket,
+        render: (r) => { const [t, l] = IDX_LABEL[r.bucket] || ["off", r.bucket]; return `${stateTag(t, l, r.coverage_state || "")}${r.coverage_state && r.verdict !== "IMPRESSIONS" ? `<span class="cell-sub">${esc(r.coverage_state)}</span>` : r.verdict === "IMPRESSIONS" ? `<span class="cell-sub">déduit des impressions GSC</span>` : ""}${r.error ? `<span class="cell-sub t-crit" title="${esc(r.error)}">${esc(String(r.error).slice(0, 70))}</span>` : ""}`; } },
+      { key: "first_seen_at", label: "Suivi depuis", value: (r) => r.first_seen_at || "", render: (r) => when(r.first_seen_at) },
+      { key: "last_crawl_at", label: "Dernière exploration", value: (r) => r.last_crawl_at || "", render: (r) => when(r.last_crawl_at) },
+      { key: "last_inspected_at", label: "Inspecté", value: (r) => r.last_inspected_at || "", render: (r) => when(r.last_inspected_at) },
+      { key: "act", label: "Actions", th: `<span class="sr-only">Actions</span>`, sort: false, csv: false, r: 1,
+        render: (r) => `<span class="btn-row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap">
+          <button class="btn sm" type="button" data-idx-inspect="${esc(r.url)}" title="Inspecter cette URL maintenant">Inspecter</button>
+          ${r.inspection_link ? `<a class="btn sm ghost" href="${esc(r.inspection_link)}" target="_blank" rel="noopener" title="Ouvrir dans Search Console (Demander l'indexation)">${icon("ext")}GSC</a>` : ""}</span>` },
+    ],
+  });
+}
+Commands.register({ id: "idx-work", label: "Indexation · inspecter un lot maintenant", hint: "≈ 100 s", run: () => { Router.go("index"); setTimeout(() => $("#idx-work")?.click(), 60); } });
+
+/* ═══════════ Pinterest (Blotato) ═══════════ */
+const PIN_PERIODS = [{ d: 7, t: "7 j" }, { d: 30, t: "30 j" }, { d: 90, t: "90 j" }];
+const PinState = { days: Number(lsGet("pin_days", 30)) || 30, site: "", order: "impressions", pending: 0, sched: [] };
+
+Views.pinterest = {
+  title: "Pinterest",
+  init(el) {
+    el.innerHTML = `
+      <div class="vh">
+        <div><h1>Pinterest</h1><p class="sub" id="pin-sub">Planning réel, publiés et stats, synchronisés depuis Blotato toutes les 15 min</p></div>
+        <div class="filters">
+          <select id="pin-site" aria-label="Site"><option value="">Tous les comptes</option></select>
+          <div class="seg" id="pin-period" role="group" aria-label="Période">${PIN_PERIODS.map((p) => `<button type="button" data-d="${p.d}" aria-pressed="${p.d === PinState.days}">${p.t}</button>`).join("")}</div>
+          <button class="btn" type="button" id="pin-sync" title="Relit Blotato maintenant (≈ 2 min)">${icon("sync")}<span>Synchroniser Blotato</span></button>
+        </div>
+      </div>
+      <div class="stack">
+        <div id="pin-banner" hidden></div>
+        <div id="pin-kpis">${skelKpis(6)}</div>
+        <div class="grid g-21">
+          ${chartPanel({ id: "pin-daily", title: "Pins publiés par jour", legend: [{ label: "Publiés", color: "--series-1", kind: "sq" }, { label: "Échecs", color: "--crit", kind: "sq" }] })}
+          ${panel({ title: "Échecs récents", meta: `<span id="pin-fail-meta"></span>`, flush: true, body: `<div id="pin-fail">${skelRows(5)}</div>` })}
+        </div>
+        ${panel({ title: "Sheet vs Blotato · 14 prochains jours", meta: "chaque case : prévu dans le Sheet / réellement programmé chez Blotato", flush: true, body: `<div id="pin-rec">${skelRows(8)}</div>`,
+          note: "Rouge : rien chez Blotato ce jour-là. Orange : le Sheet et Blotato ne sont pas d'accord (pin planifié pas encore envoyé, annulé, ou programmé hors Sheet)." })}
+        ${panel({ title: "Par compte", meta: `<span id="pin-acc-meta"></span>`, flush: true, tools: csvBtn("pin-acc"), body: `<div id="pin-acc">${skelRows(8)}</div>` })}
+        ${panel({ title: "Programmés chez Blotato", meta: `<span id="pin-sched-meta"></span>`, flush: true,
+          tools: `<input type="search" class="sm" id="pin-sched-q" placeholder="Filtrer titre ou lien" aria-label="Filtrer les posts programmés" autocomplete="off" style="width:180px">${csvBtn("pin-sched")}`,
+          body: `<div id="pin-sched">${skelRows(8)}</div>`,
+          note: "« Reprogrammer » et « Annuler » agissent directement chez Blotato. Le Sheet n'est pas modifié : un pin annulé reste « scheduled » dans l'onglet Pins." })}
+        <div class="grid g-2">
+          ${panel({ title: "Meilleurs pins", meta: `<span id="pin-top-meta"></span>`, flush: true,
+            tools: `<select class="sm" id="pin-order" aria-label="Trier par">${[["impressions", "Impressions"], ["clicks", "Clics"], ["saves", "Enregistrements"], ["pin_clicks", "Clics sur l'épingle"]].map(([v, t]) => `<option value="${v}"${v === PinState.order ? " selected" : ""}>${t}</option>`).join("")}</select>${csvBtn("pin-top")}`,
+            body: `<div id="pin-top">${skelRows(8)}</div>` })}
+          ${panel({ title: "Par article", meta: "pins publiés reliés à leur article", flush: true, tools: csvBtn("pin-art"), body: `<div id="pin-art">${skelRows(8)}</div>`,
+            note: "Relié via le lien du pin. Les stats (impressions, clics) viennent de Blotato ; « Clics » = clicksCount de Pinterest." })}
+        </div>
+      </div>`;
+    $("#pin-site", el).addEventListener("change", (e) => { PinState.site = e.target.value; Router.setParams({ site: PinState.site }); Router.render({ silent: true }); });
+    $("#pin-period", el).addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-d]"); if (!b) return;
+      PinState.days = Number(b.dataset.d); lsSet("pin_days", String(PinState.days));
+      $$("#pin-period button", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      Router.render({ silent: true });
+    });
+    $("#pin-order", el).addEventListener("change", (e) => { PinState.order = e.target.value; Router.render({ silent: true }); });
+    $("#pin-sched-q", el).addEventListener("input", () => pinDrawSched());
+    $("#pin-sync", el).addEventListener("click", (e) => pinSync(e.currentTarget));
+    el.addEventListener("click", (e) => {
+      const c = e.target.closest("[data-pin-cancel]"); if (c) { pinCancel(c); return; }
+      const m = e.target.closest("[data-pin-move]"); if (m) { pinMove(m); return; }
+      const s = e.target.closest("[data-pin-sync]"); if (s) pinSync(s);
+    });
+  },
+  pause() { return PinState.pending > 0; },
+  async load(ctx) {
+    const el = ctx.el, force = ctx.force, days = PinState.days;
+    PinState.site = ctx.params.site || "";
+    const site = PinState.site || null;
+    const r = await settle({
+      stats: () => Store.get(`pin:stats:${days}`, () => rpc("blotato_site_stats", { p_days: days }), { force }),
+      cal: () => Store.get(`pin:cal:${days}`, () => rpc("blotato_calendar", { p_past: days, p_next: 0 }), { force }),
+      rec: () => Store.get("pin:rec", () => rpc("blotato_reconcile", { p_next: 14 }), { force }),
+      fail: () => Store.get("pin:fail", () => rows(sb.from("blotato_failed").select("*").order("post_time", { ascending: false }).limit(200), "échecs Blotato"), { force }),
+      sched: () => Store.get("pin:sched", () => rows(sb.from("blotato_schedules").select("*").order("scheduled_at").limit(2000), "programmés Blotato"), { force }),
+      top: () => Store.get(`pin:top:${site}:${days}:${PinState.order}`, () => rpc("blotato_top_pins", { p_site: site, p_days: Math.max(days, 30), p_order: PinState.order, p_limit: 100 }), { force }),
+      art: () => Store.get(`pin:art:${site}`, () => rpc("blotato_article_stats", { p_site: site, p_limit: 200 }), { force }),
+      alerts: () => Data.openAlerts({ force }),
+      status: () => Store.get("pin:status", () => fn("blotato", { action: "status" }), { force, ttl: 5 * 60_000 }),
+    });
+    if (!ctx.alive()) return;
+    const stats = r.stats.ok ? r.stats.data || [] : [];
+    const sel = $("#pin-site", el);
+    const sites = [...new Set(stats.map((s) => s.site).filter(Boolean))].sort();
+    sel.innerHTML = `<option value="">Tous les comptes</option>` + sites.map((s) => `<option value="${esc(s)}"${s === PinState.site ? " selected" : ""}>${esc(s)}</option>`).join("");
+    const f = (x) => !PinState.site || x.site === PinState.site;
+
+    /* Bandeau : clé manquante ou synchro en échec */
+    const apiAlert = (r.alerts.ok ? r.alerts.data : []).find((a) => a.kind === "blotato_api");
+    const st = r.status.ok ? r.status.data : null;
+    const banner = $("#pin-banner", el);
+    if (st && !st.configured) {
+      banner.hidden = false;
+      banner.innerHTML = `<div class="banner warn" role="status"><div class="t"><b>Blotato pas encore branché</b><span class="small">Ajoute le secret <code class="copy" data-copy="BLOTATO_API_KEY" role="button" tabindex="0">BLOTATO_API_KEY</code> dans <a href="${esc(OPS_SECRETS_URL)}" target="_blank" rel="noopener">les secrets Supabase</a> (Blotato → Settings → API), puis clique « Synchroniser Blotato ».</span></div><button class="btn sm" type="button" data-pin-sync>Synchroniser</button></div>`;
+    } else if (apiAlert) {
+      banner.hidden = false;
+      banner.innerHTML = `<div class="banner crit" role="alert"><div class="t"><b>Dernière synchro Blotato en échec</b><span class="small">${esc(apiAlert.details?.error || apiAlert.title)}</span></div><button class="btn sm" type="button" data-pin-sync>Réessayer</button></div>`;
+    } else { banner.hidden = true; banner.innerHTML = ""; }
+    $("#pin-sub", el).innerHTML = st?.last_sync ? `Synchronisé ${when(st.last_sync)} · toutes les 15 min · ${plural(stats.length, "compte", "comptes")}` : "Planning réel, publiés et stats, synchronisés depuis Blotato toutes les 15 min";
+
+    /* KPI */
+    const S = stats.filter(f);
+    const impr = sum(S, "impressions"), clicks = sum(S, "clicks");
+    if (!r.stats.ok) $("#pin-kpis", el).innerHTML = errBox(r.stats.error);
+    else if (!stats.length) $("#pin-kpis", el).innerHTML = emptyBox("Aucun compte Blotato synchronisé", "Ajoute BLOTATO_API_KEY puis lance une synchro.");
+    else $("#pin-kpis", el).innerHTML = kpis([
+      kpi({ label: `Publiés · ${days} j`, value: fmt(sum(S, "published")), sub: `${fmtDec(sum(S, "published") / days)} / jour` }),
+      kpi({ label: "Échecs", value: fmt(sum(S, "failed")), tone: sum(S, "failed") ? "crit" : "", sub: "chez Blotato" }),
+      kpi({ label: "Programmés · 7 j", value: fmt(sum(S, "scheduled_next7")), sub: `${fmtFull(PinState.site ? (r.sched.ok ? r.sched.data.filter(f).length : 0) : (r.sched.ok ? r.sched.data.length : 0))} au total` }),
+      kpi({ label: "Impressions", value: fmt(impr), sub: "pins publiés sur la période" }),
+      kpi({ label: "Clics", value: fmt(clicks), sub: impr ? `CTR ${fmtPct(clicks / impr, 2)}` : "" }),
+      kpi({ label: "Enregistrements", value: fmt(sum(S, "saves")), sub: `${fmt(sum(S, "pin_clicks"))} clics sur l'épingle` }),
+    ]);
+
+    /* Publiés / échecs par jour */
+    if (!r.cal.ok) Charts.error("pin-daily", r.cal.error);
+    else {
+      const byDay = new Map();
+      (r.cal.data || []).filter(f).forEach((x) => { const d = String(x.day).slice(0, 10); const o = byDay.get(d) || { p: 0, f: 0 }; o.p += num(x.published); o.f += num(x.failed); byDay.set(d, o); });
+      const labels = [...byDay.keys()].sort();
+      Charts.bar("pin-daily", { title: "Pins publiés", labels, int: true, series: [
+        { label: "Publiés", data: labels.map((d) => byDay.get(d).p), color: "--series-1" },
+        { label: "Échecs", data: labels.map((d) => byDay.get(d).f), color: "--crit" }],
+        empty: { title: "Aucun pin publié sur la période", text: st && !st.configured ? "Blotato n'est pas encore branché." : "" } });
+    }
+
+    /* Échecs */
+    const fails = (r.fail.ok ? r.fail.data : []).filter(f);
+    $("#pin-fail-meta", el).textContent = fails.length ? `${fmtFull(fails.length)} sur 14 j` : "";
+    if (!r.fail.ok) $("#pin-fail", el).innerHTML = errBox(r.fail.error);
+    else mountTable($("#pin-fail", el), {
+      id: "pin-fail", rows: fails, limit: 30, scrollY: true, empty: `<div class="empty">${stateTag("ok", "Aucun échec")}<div>sur les 14 derniers jours</div></div>`,
+      cols: [
+        { key: "post_time", label: "Quand", value: (x) => x.post_time || "", render: (x) => when(x.post_time) },
+        { key: "site", label: "Compte", render: (x) => esc(x.site || x.account_id) },
+        { key: "error", label: "Erreur", render: (x) => `<span class="small" title="${esc(x.error || "")}">${esc(String(x.error || "—").slice(0, 140))}</span>` },
+      ],
+    });
+
+    /* Sheet vs Blotato */
+    pinDrawRec($("#pin-rec", el), r.rec, f);
+
+    /* Par compte */
+    if (!r.stats.ok) $("#pin-acc", el).innerHTML = errBox(r.stats.error);
+    else {
+      $("#pin-acc-meta", el).textContent = `${days} derniers jours`;
+      mountTable($("#pin-acc", el), {
+        id: "pin-acc", rows: S, sort: { key: "published", dir: "desc" }, csvName: "pinterest-comptes",
+        onRow: (s) => { if (s.site) { PinState.site = s.site; Router.setParams({ site: s.site }); Router.render({ silent: true }); } },
+        cols: [
+          { key: "site", label: "Compte", render: (s) => `<span class="cell-main">${esc(s.site || "—")}</span><span class="cell-sub mono">${esc(s.account_id)}</span>` },
+          { key: "published", label: "Publiés", r: 1, num: 1, value: (s) => num(s.published), render: (s) => fmtFull(s.published) },
+          { key: "failed", label: "Échecs", r: 1, num: 1, cls: (s) => (num(s.failed) ? "t-crit" : "zero"), value: (s) => num(s.failed), render: (s) => fmtFull(s.failed) },
+          { key: "scheduled_next7", label: "Prog. 7 j", r: 1, num: 1, cls: (s) => (num(s.scheduled_next7) ? "" : "t-crit"), value: (s) => num(s.scheduled_next7), render: (s) => fmtFull(s.scheduled_next7) },
+          { key: "next_scheduled", label: "Prochain", value: (s) => s.next_scheduled || "", render: (s) => when(s.next_scheduled) },
+          { key: "last_published", label: "Dernier publié", value: (s) => s.last_published || "", render: (s) => when(s.last_published) },
+          { key: "impressions", label: "Impressions", r: 1, num: 1, value: (s) => num(s.impressions), render: (s) => fmt(s.impressions) },
+          { key: "clicks", label: "Clics", r: 1, num: 1, value: (s) => num(s.clicks), render: (s) => fmt(s.clicks) },
+          { key: "ctr", label: "CTR", r: 1, num: 1, value: (s) => numOrNull(s.ctr), render: (s) => fmtPct(s.ctr, 2) },
+          { key: "saves", label: "Enreg.", r: 1, num: 1, value: (s) => num(s.saves), render: (s) => fmt(s.saves) },
+        ],
+      });
+    }
+
+    /* Programmés */
+    PinState.sched = r.sched.ok ? r.sched.data : [];
+    if (!r.sched.ok) $("#pin-sched", el).innerHTML = errBox(r.sched.error); else pinDrawSched();
+
+    /* Top pins + par article */
+    const pinCols = (metric) => [
+      { key: "created_at", label: "Publié", value: (p) => p.created_at || "", render: (p) => when(p.created_at) },
+      { key: "title", label: "Pin", value: (p) => p.title || "", csv: (p) => p.title || "",
+        render: (p) => `${p.post_url ? `<a class="cell-main trunc" style="max-width:300px" href="${esc(p.post_url)}" target="_blank" rel="noopener" title="${esc(p.title || "")}">${esc(p.title || "(sans titre)")}</a>` : `<span class="cell-main trunc" style="max-width:300px">${esc(p.title || "—")}</span>`}<span class="cell-sub">${esc(p.site || "")}${p.link ? ` · <a href="${esc(p.link)}" target="_blank" rel="noopener">article</a>` : ""}</span>` },
+      { key: "impressions", label: "Impr.", r: 1, num: 1, value: (p) => numOrNull(p.impressions), render: (p) => fmt(p.impressions) },
+      { key: "clicks", label: "Clics", r: 1, num: 1, value: (p) => numOrNull(p.clicks), render: (p) => fmt(p.clicks) },
+      { key: "saves", label: "Enreg.", r: 1, num: 1, value: (p) => numOrNull(p.saves), render: (p) => fmt(p.saves) },
+    ];
+    if (!r.top.ok) $("#pin-top", el).innerHTML = errBox(r.top.error);
+    else { $("#pin-top-meta", el).textContent = `${Math.max(days, 30)} derniers jours`; mountTable($("#pin-top", el), { id: "pin-top", rows: r.top.data || [], limit: 25, scrollY: true, csvName: "pinterest-top-pins", cols: pinCols(), empty: emptyBox("Pas encore de stats", "Les stats arrivent avec les pins publiés via Blotato.") }); }
+    if (!r.art.ok) $("#pin-art", el).innerHTML = errBox(r.art.error);
+    else mountTable($("#pin-art", el), {
+      id: "pin-art", rows: r.art.data || [], limit: 25, scrollY: true, csvName: "pinterest-par-article", sort: { key: "clicks", dir: "desc" },
+      empty: emptyBox("Aucun pin relié à un article pour l'instant", "Le lien de chaque pin publié est lu progressivement (40 par synchro)."),
+      cols: [
+        { key: "keyword", label: "Article", value: (a) => a.keyword || a.url || "", csv: (a) => a.url || "",
+          render: (a) => `${a.url ? `<a class="cell-main trunc" style="max-width:280px" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.keyword || v6Short(a.url))}</a>` : esc(a.article_id)}<span class="cell-sub">${esc(a.site || "")} · ${esc(a.article_id)}${a.indexed === false ? ` · <span class="t-crit">pas indexé</span>` : ""}</span>` },
+        { key: "pins", label: "Pins", r: 1, num: 1, value: (a) => num(a.pins), render: (a) => fmtFull(a.pins) },
+        { key: "impressions", label: "Impr.", r: 1, num: 1, value: (a) => num(a.impressions), render: (a) => fmt(a.impressions) },
+        { key: "clicks", label: "Clics", r: 1, num: 1, value: (a) => num(a.clicks), render: (a) => fmt(a.clicks) },
+        { key: "saves", label: "Enreg.", r: 1, num: 1, value: (a) => num(a.saves), render: (a) => fmt(a.saves) },
+      ],
+    });
+  },
+};
+function pinDrawRec(box, res, f) {
+  if (!res.ok) { box.innerHTML = errBox(res.error); return; }
+  const data = (res.data || []).filter(f);
+  const days = [...new Set(data.map((x) => String(x.day).slice(0, 10)))].sort();
+  const sites = [...new Set(data.map((x) => x.site))].sort((a, b) => String(a).localeCompare(String(b), "fr"));
+  if (!days.length || !sites.length) { box.innerHTML = emptyBox("Rien à comparer", "Il faut le Pipeline (Sheet) et au moins une synchro Blotato."); return; }
+  const m = new Map(data.map((x) => [`${x.site}|${String(x.day).slice(0, 10)}`, x]));
+  const isWe = (k) => { const w = dayDate(k).getUTCDay(); return w === 0 || w === 6; };
+  const head = `<tr><th class="first" scope="col">Compte</th>${days.map((k) => { const [a, ...b] = fmtDayW(k).split(" "); return `<th class="c${isWe(k) ? " we" : ""}" scope="col" title="${esc(fmtDayLong(k))}">${esc(a)}<br>${esc(b.join(" "))}</th>`; }).join("")}</tr>`;
+  const body = sites.map((s) => `<tr><td class="first"><span class="cell-main">${esc(s)}</span></td>${days.map((k) => {
+    const x = m.get(`${s}|${k}`) || { sheet: 0, blotato: 0 };
+    const sh = num(x.sheet), bl = num(x.blotato);
+    const t = `${s} · ${fmtDayLong(k)} : ${sh} prévu(s) dans le Sheet, ${bl} programmé(s) chez Blotato`;
+    if (!bl) return `<td class="c zero" title="${esc(t)}">${sh ? `${sh}/0` : "0"}</td>`;
+    const diff = sh !== bl;
+    return `<td class="c" style="background:color-mix(in srgb, var(${diff ? "--warn" : "--series-1"}) ${diff ? 30 : 24}%, var(--surface))" title="${esc(t)}">${diff ? `${sh}/${bl}` : bl}</td>`;
+  }).join("")}</tr>`).join("");
+  box.innerHTML = `<div class="tbl-wrap"><table class="tbl cal"><caption class="sr-only">Pins prévus dans le Sheet et programmés chez Blotato, par compte et par jour.</caption><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+function pinDrawSched() {
+  const el = $('main.main > section[data-view="pinterest"]'); if (!el) return;
+  const q = ($("#pin-sched-q", el)?.value || "").toLowerCase().trim();
+  const list = PinState.sched.filter((x) => (!PinState.site || x.site === PinState.site) && (!q || `${x.title || ""} ${x.link || ""} ${x.text || ""}`.toLowerCase().includes(q)));
+  $("#pin-sched-meta", el).textContent = `${fmtFull(list.length)} post(s)`;
+  mountTable($("#pin-sched", el), {
+    id: "pin-sched", rows: list, limit: 40, scrollY: true, csvName: "blotato-programmes", sort: { key: "scheduled_at", dir: "asc" },
+    empty: emptyBox("Aucun post programmé", "Planifie des pins (Pipeline → Planificateur) : l'envoi automatique les transmet à Blotato via WF3b."),
+    cols: [
+      { key: "scheduled_at", label: "Programmé", value: (x) => x.scheduled_at, csv: (x) => x.scheduled_at, render: (x) => `<span class="cell-main mono">${esc(fmtAbs(x.scheduled_at))}</span><span class="cell-sub">${esc(rel(x.scheduled_at))}</span>` },
+      { key: "site", label: "Compte", render: (x) => esc(x.site || x.account_id) },
+      { key: "title", label: "Pin", value: (x) => x.title || x.text || "", csv: (x) => x.title || "",
+        render: (x) => `<span class="cell-main trunc" style="max-width:320px" title="${esc(x.text || "")}">${esc(x.title || String(x.text || "").slice(0, 80) || "—")}</span>${x.link ? `<span class="cell-sub"><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(v6Short(x.link).slice(0, 60))}</a>${x.article_id ? ` · ${esc(x.article_id)}` : ""}</span>` : ""}` },
+      { key: "act", label: "Actions", th: `<span class="sr-only">Actions</span>`, sort: false, csv: false, r: 1,
+        render: (x) => `<span class="btn-row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap">
+          <button class="btn sm" type="button" data-pin-move="${esc(x.id)}" data-at="${esc(x.scheduled_at)}">Reprogrammer</button>
+          <button class="btn sm ghost danger" type="button" data-pin-cancel="${esc(x.id)}" data-at="${esc(x.scheduled_at)}" data-title="${esc(x.title || "")}">Annuler</button></span>` },
+    ],
+  });
+}
+const pinReload = () => { Store.drop("pin"); if (Router.view === "pinterest") Router.render({ silent: true, force: true }); };
+async function pinSync(btn) {
+  PinState.pending++;
+  try {
+    await act(btn, {
+      run: () => fn("blotato", { action: "sync" }),
+      bad: (r) => !r?.ok,
+      ok: (r) => `Blotato synchronisé · ${fmtFull(r.scheduled)} programmés, ${fmtFull(r.published_seen)} publiés relus, ${fmtFull(r.failed ?? 0)} échecs`,
+      fail: (r) => r?.error || "Synchro Blotato en échec",
+      after: () => { Store.drop("alerts_open"); Health.load(true); pinReload(); },
+    });
+  } finally { PinState.pending--; }
+}
+async function pinCancel(btn) {
+  PinState.pending++;
+  try {
+    await act(btn, {
+      confirm: { title: "Annuler ce post chez Blotato ?", danger: true, ok: "Annuler le post",
+        body: `<p><b>${esc(btn.dataset.title || "Pin")}</b><br>prévu le ${esc(fmtAbs(btn.dataset.at))}.</p><p class="hint">Le post est supprimé de la file Blotato. Le Sheet n'est pas modifié (le pin reste « scheduled » dans l'onglet Pins).</p>` },
+      run: () => fn("blotato", { action: "cancel", schedule_id: btn.dataset.pinCancel }),
+      bad: (r) => !r?.ok, ok: (r) => r.message || "Post annulé", after: pinReload,
+    });
+  } finally { PinState.pending--; }
+}
+async function pinMove(btn) {
+  const cur = new Date(btn.dataset.at);
+  const local = (d) => { const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const min = new Date(Date.now() + 5 * 60_000);
+  const ok = await confirmDlg({ title: "Reprogrammer ce post", ok: "Reprogrammer",
+    body: `<p class="small">Actuellement : <b>${esc(fmtAbs(btn.dataset.at))}</b></p>
+      <label class="field" style="display:block;margin-top:10px">Nouvelle date et heure (heure de cet appareil)
+        <input type="datetime-local" id="pin-move-at" value="${esc(local(isNaN(cur) ? min : cur))}" min="${esc(local(min))}" style="width:100%;margin-top:6px"></label>` });
+  if (!ok) return;
+  const v = document.getElementById("pin-move-at")?.value;
+  const when2 = v ? new Date(v) : null;
+  if (!when2 || isNaN(when2)) return toast("Date invalide", { err: true });
+  PinState.pending++;
+  try {
+    await act(btn, { run: () => fn("blotato", { action: "reschedule", schedule_id: btn.dataset.pinMove, scheduled_at: when2.toISOString() }), bad: (r) => !r?.ok, ok: (r) => r.message || "Reprogrammé", after: pinReload });
+  } finally { PinState.pending--; }
+}
+Commands.register({ id: "pin-sync", label: "Pinterest · synchroniser Blotato maintenant", hint: "≈ 2 min", run: () => { Router.go("pinterest"); setTimeout(() => $("#pin-sync")?.click(), 60); } });
+
+/* ═══════════ Agent (DeepSeek) ═══════════ */
+const AGENT_ACTIONS = {
+  wf1_run: { label: "Lancer WF1 (articles)", run: (p) => gas("wf1_run", { sites: p.sites || [], weeks: p.weeks || [] }), gas: true },
+  wf1_retry_failed: { label: "Relancer les articles en échec", run: (p) => gas("wf1_retry_failed", { sites: p.sites || [], weeks: p.weeks || [] }), gas: true },
+  wf2_run: { label: "Lancer WF2a (images GPU)", run: (p) => gas("wf2_run", { sites: p.sites || [] }), gas: true },
+  wf2b_run: { label: "Lancer WF2b (envoi WordPress)", run: (p) => gas("wf2b_run", { sites: p.sites || [] }), gas: true },
+  wf2_retry_failed: { label: "Relancer les images en échec", run: (p) => gas("wf2_retry_failed", { sites: p.sites || [] }), gas: true },
+  wf3_run: { label: "Lancer WF3a (pins)", run: (p) => gas("wf3_run", { sites: p.sites || [] }), gas: true },
+  reset_failed: { label: "Tout remettre en pending", run: () => gas("reset_failed", {}), gas: true, danger: true },
+  send_planned: { label: "Envoyer les pins dus maintenant", run: () => gas("send_planned", {}), gas: true },
+  blotato_cancel: { label: "Annuler un post Blotato", run: (p) => fn("blotato", { action: "cancel", schedule_id: p.schedule_id }), danger: true },
+  blotato_reschedule: { label: "Reprogrammer un post Blotato", run: (p) => fn("blotato", { action: "reschedule", schedule_id: p.schedule_id, scheduled_at: p.scheduled_at }) },
+  resolve_alert: { label: "Résoudre une alerte", run: (p) => write(sb.from("alerts").update({ resolved_at: new Date().toISOString() }).eq("id", p.alert_id), "alerte").then(() => ({ ok: true })) },
+  index_inspect: { label: "Inspecter une URL", run: (p) => fn("index-sync", { action: "inspect", url: p.url }) },
+  sync_n8n: { label: "Synchroniser n8n", run: () => fn("ops-sync", { action: "run" }) },
+  sync_blotato: { label: "Synchroniser Blotato", run: () => fn("blotato", { action: "sync" }) },
+  refresh_pipeline: { label: "Relire le Google Sheet", run: () => fn("pipeline", { action: "refresh" }) },
+};
+const Agent = {
+  msgs: [], busy: false, open: false,
+  load() { try { this.msgs = JSON.parse(sessionStorage.getItem("agent_msgs") || "[]"); } catch (_) { this.msgs = []; } },
+  save() { try { sessionStorage.setItem("agent_msgs", JSON.stringify(this.msgs.slice(-30))); } catch (_) {} },
+  mount() {
+    this.load();
+    const fab = document.createElement("button");
+    fab.className = "agent-fab"; fab.type = "button"; fab.id = "agent-fab"; fab.setAttribute("aria-label", "Ouvrir l'assistant");
+    fab.innerHTML = `${icon("chat")}<span>Assistant</span>`;
+    const pane = document.createElement("aside");
+    pane.className = "agent"; pane.id = "agent"; pane.hidden = true; pane.setAttribute("aria-label", "Assistant");
+    pane.innerHTML = `<div class="agent-h"><b>Assistant</b><span class="small muted">DeepSeek · lit tes données, propose, tu confirmes</span>
+        <button class="btn sm ghost" type="button" id="agent-clear" title="Nouvelle conversation">Effacer</button>
+        <button class="btn icon sm ghost" type="button" id="agent-close" aria-label="Fermer">${icon("x")}</button></div>
+      <div class="agent-log" id="agent-log" aria-live="polite"></div>
+      <div class="agent-sugg" id="agent-sugg"></div>
+      <form class="agent-f" id="agent-form"><textarea id="agent-in" rows="2" placeholder="Ex. : quels sites n'ont rien de programmé demain ?" aria-label="Message"></textarea>
+        <button class="btn primary" type="submit" id="agent-send" aria-label="Envoyer">${icon("send")}</button></form>`;
+    document.body.append(fab, pane);
+    fab.onclick = () => this.toggle(true);
+    $("#agent-close").onclick = () => this.toggle(false);
+    $("#agent-clear").onclick = () => { this.msgs = []; this.save(); this.draw(); };
+    $("#agent-form").addEventListener("submit", (e) => { e.preventDefault(); this.send(); });
+    $("#agent-in").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.send(); } });
+    pane.addEventListener("click", (e) => {
+      const s = e.target.closest("[data-sugg]"); if (s) { $("#agent-in").value = s.dataset.sugg; this.send(); return; }
+      const x = e.target.closest("[data-agent-exec]"); if (x) this.exec(x);
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this.open && !$("#dlg").open) this.toggle(false); });
+    Commands.register({ id: "agent", label: "Ouvrir l'assistant", hint: "questions sur tes données", run: () => this.toggle(true) });
+    this.draw();
+  },
+  toggle(on) {
+    this.open = on; $("#agent").hidden = !on; $("#agent-fab").hidden = on;
+    if (on) setTimeout(() => $("#agent-in")?.focus(), 30);
+  },
+  fmt(t) {
+    let h = esc(t || "");
+    h = h.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    h = h.split(/\n{2,}/).map((block) => {
+      const lines = block.split("\n");
+      if (lines.every((l) => /^\s*([-*•]|\d+\.)\s+/.test(l))) return `<ul>${lines.map((l) => `<li>${l.replace(/^\s*([-*•]|\d+\.)\s+/, "")}</li>`).join("")}</ul>`;
+      if (lines.length > 1 && lines.every((l) => /^\s*\|.*\|\s*$/.test(l))) {
+        const rowsT = lines.filter((l) => !/^\s*\|[\s:|-]+\|\s*$/.test(l)).map((l) => l.trim().slice(1, -1).split("|").map((c) => c.trim()));
+        return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${rowsT[0].map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${rowsT.slice(1).map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      }
+      return `<p>${lines.join("<br>")}</p>`;
+    }).join("");
+    return h;
+  },
+  draw() {
+    const log = $("#agent-log");
+    log.innerHTML = this.msgs.length ? this.msgs.map((m, i) => m.role === "user"
+      ? `<div class="am u">${esc(m.content)}</div>`
+      : `<div class="am a">${this.fmt(m.content)}
+          ${(m.proposals || []).map((p, j) => `<div class="prop"><div><b>${esc(AGENT_ACTIONS[p.action]?.label || p.action)}</b><div class="small">${esc(p.summary)}</div>${Object.keys(p.params || {}).length ? `<code class="small">${esc(JSON.stringify(p.params))}</code>` : ""}</div>
+            ${p.done ? `<span class="tag">${esc(p.done)}</span>` : `<button class="btn sm primary" type="button" data-agent-exec="${i}:${j}">Exécuter</button>`}</div>`).join("")}
+          ${m.steps?.length ? `<div class="steps">${m.steps.map((s) => `<span class="tag" title="${esc(JSON.stringify(s.args || {}))}">${s.ok ? "" : "⚠ "}${esc(s.tool)}</span>`).join(" ")}${m.usage ? ` <span class="muted small">${fmtFull(num(m.usage.prompt_tokens) + num(m.usage.completion_tokens))} tokens</span>` : ""}</div>` : ""}</div>`).join("")
+      : `<div class="am a"><p>Pose une question sur ton système : trafic, indexation, workflows, pins, coûts… Je lis les données et je te <b>propose</b> des actions ; rien n'est exécuté sans ton clic.</p></div>`;
+    if (this.busy) log.insertAdjacentHTML("beforeend", `<div class="am a busy">${lamp("run")} je regarde les données…</div>`);
+    log.scrollTop = log.scrollHeight;
+    $("#agent-sugg").innerHTML = this.msgs.length ? "" : ["Résume l'état du système aujourd'hui", "Quels articles ne sont pas indexés sur foodzauber ?", "Quels comptes n'ont rien de programmé demain ?", "Top 5 des pins par clics sur 30 jours", "Pourquoi WF3b a échoué cette semaine ?"]
+      .map((s) => `<button type="button" class="chip" data-sugg="${esc(s)}">${esc(s)}</button>`).join("");
+  },
+  async send() {
+    const inp = $("#agent-in"), text = inp.value.trim();
+    if (!text || this.busy) return;
+    inp.value = "";
+    this.msgs.push({ role: "user", content: text });
+    this.busy = true; $("#agent-send").disabled = true; this.draw();
+    try {
+      const r = await fn("agent", { messages: this.msgs.map((m) => ({ role: m.role, content: m.content })), context: { view: Router.view, site: Router.params.site || "" } });
+      this.msgs.push({ role: "assistant", content: r.answer || (r.proposals?.length ? "Voici ce que je propose :" : "(pas de réponse)"), proposals: r.proposals || [], steps: r.steps || [], usage: r.usage });
+    } catch (e) {
+      this.msgs.push({ role: "assistant", content: `⚠ ${e.message || e}` });
+    } finally { this.busy = false; $("#agent-send").disabled = false; this.save(); this.draw(); }
+  },
+  async exec(btn) {
+    const [i, j] = btn.dataset.agentExec.split(":").map(Number);
+    const p = this.msgs[i]?.proposals?.[j]; if (!p) return;
+    const A = AGENT_ACTIONS[p.action]; if (!A) return toast("Action inconnue", { err: true });
+    const r = await act(btn, {
+      confirm: { title: `${A.label} ?`, danger: !!A.danger, ok: "Exécuter",
+        body: `<p>${esc(p.summary)}</p>${Object.keys(p.params || {}).length ? `<p class="hint"><code>${esc(JSON.stringify(p.params))}</code></p>` : ""}<p class="hint">Proposé par l'assistant : vérifie avant de confirmer.</p>` },
+      run: () => A.run(p.params || {}),
+      bad: (x) => (A.gas ? gasBad(x) : x && x.ok === false), fail: (x) => (A.gas ? gasFail(x) : x?.error || "Échec"),
+      ok: (x) => x?.message || `${A.label} : fait`,
+      after: () => { Store.c.clear(); Health.load(true); Router.render({ silent: true, force: true }); },
+    });
+    if (r !== null) { p.done = `exécuté ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`; this.save(); this.draw(); }
+  },
+};
+
+/* ═══════════ Connexions : connecteur Claude, Blotato, agent ═══════════ */
+ST_FIELDS.push(
+  { key: "index_daily_per_site", label: "Inspections Google / site / jour", type: "int", def: 300 },
+  { key: "index_alert_min", label: "Alerte non indexés > 14 j (seuil)", type: "int", def: 25 },
+  { key: "agent_daily_tokens", label: "Assistant : plafond tokens / jour", type: "int", def: 400000 },
+);
+(() => {
+  const init0 = Views.settings.init, load0 = Views.settings.load;
+  Views.settings.init = function (el) {
+    init0.call(this, el);
+    $(".stack", el).insertAdjacentHTML("beforeend", `<div class="grid g-2">
+      ${panel({ title: "Connecteur Claude (MCP)", meta: "lecture seule", body: `<div id="st-mcp">${skelRows(3)}</div>` })}
+      ${panel({ title: "Blotato · Assistant", body: `<div id="st-v6">${skelRows(3)}</div>` })}
+    </div>`);
+    el.addEventListener("click", async (e) => {
+      const rot = e.target.closest("[data-mcp-rotate]");
+      if (rot) await act(rot, { confirm: { title: "Régénérer l'URL du connecteur ?", danger: true, ok: "Régénérer", body: "L'ancienne URL cessera de marcher : il faudra la remplacer dans claude.ai (Settings → Connectors)." },
+        run: () => fn("control-mcp", { action: "rotate" }), ok: () => "Nouvelle URL générée", after: (r) => stDrawMcp(r) });
+      const show = e.target.closest("[data-mcp-show]");
+      if (show) { const c = $("#st-mcp-url"); c.textContent = c.dataset.full; c.dataset.copy = c.dataset.full; show.remove(); }
+      const bs = e.target.closest("[data-st-blotato]");
+      if (bs) pinSync(bs);
+    });
+  };
+  Views.settings.load = async function (ctx) {
+    await load0.call(this, ctx);
+    if (!ctx.alive()) return;
+    const r = await settle({
+      mcp: () => Store.get("mcp_info", () => fn("control-mcp", { action: "info" }), { force: ctx.force, ttl: 10 * 60_000 }),
+      blo: () => fn("blotato", { action: "status" }),
+      use: () => rows(sb.from("agent_usage").select("*").order("day", { ascending: false }).limit(7), "consommation assistant"),
+    });
+    if (!ctx.alive()) return;
+    if (r.mcp.ok) stDrawMcp(r.mcp.data); else $("#st-mcp").innerHTML = errBox(r.mcp.error);
+    const today = iso(new Date()), u = r.use.ok ? r.use.data : [];
+    const t = u.find((x) => x.day === today), week = sum(u, (x) => num(x.prompt_tokens) + num(x.completion_tokens));
+    const blo = r.blo.ok ? r.blo.data : null;
+    $("#st-v6").innerHTML = `<div class="kv">
+      <div>Blotato</div><div>${!blo ? `<span class="muted">${esc(r.blo.error?.message || "?")}</span>` : blo.configured ? `<div class="btn-row">${stateTag("ok", "Configuré")}<span class="small muted">synchro ${when(blo.last_sync)}</span><button class="btn sm" type="button" data-st-blotato>Synchroniser</button></div>` : `${stateTag("warn", "BLOTATO_API_KEY manquant")}<div class="hint">Blotato → Settings → API → copie la clé dans <a href="${esc(OPS_SECRETS_URL)}" target="_blank" rel="noopener">les secrets Supabase</a>.</div>`}</div>
+      <div>Assistant (DeepSeek)</div><div>${t ? `<div class="btn-row">${stateTag("ok", "Actif")}<span class="small muted">${fmtFull(t.calls)} question(s) aujourd'hui · ${fmt(num(t.prompt_tokens) + num(t.completion_tokens))} tokens</span></div>` : `<span class="small">Nécessite le secret <code class="copy" data-copy="DEEPSEEK_API_KEY" role="button" tabindex="0">DEEPSEEK_API_KEY</code>.</span>`}<div class="hint">7 derniers jours : ${fmt(week)} tokens. Plafond quotidien dans Réglages.</div></div>
+    </div>`;
+  };
+})();
+function stDrawMcp(info) {
+  const box = $("#st-mcp"); if (!box || !info?.url) return;
+  const masked = info.url.replace(/key=([0-9a-f]{6})[0-9a-f]+/, "key=$1••••••••");
+  box.innerHTML = `<div class="kv">
+    <div>URL du connecteur</div><div><div class="btn-row"><code class="copy" id="st-mcp-url" data-copy="${esc(info.url)}" data-full="${esc(info.url)}" role="button" tabindex="0" title="Copier l'URL complète" style="word-break:break-all">${esc(masked)}</code>
+      <button class="btn sm ghost" type="button" data-mcp-show>Afficher</button><button class="btn sm ghost danger" type="button" data-mcp-rotate>Régénérer</button></div>
+      <div class="hint">Secrète : elle donne accès en lecture à tes données. Ne la colle que dans claude.ai.</div></div>
+    <div>Installer</div><div class="small">claude.ai → <b>Settings → Connectors → Add custom connector</b> → nom « Réseau DE », URL ci-dessus (copie-la en cliquant dessus).</div>
+    <div>Outils</div><div class="small muted">${esc((info.tools || []).join(" · "))}</div>
+  </div>`;
+}
+
+
 /* ═══════════ Démarrage ═══════════ */
 Nav.build();
+Agent.mount();
 Health.bind();
 Health.paint({ alertCount: 0 });
 Commands.bind();
