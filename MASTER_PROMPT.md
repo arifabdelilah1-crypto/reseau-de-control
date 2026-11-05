@@ -117,6 +117,15 @@ Toute action qui écrit ou lance un workflow passe par une **confirmation**.
 
 ---
 
+### 3.7 Indexation (v6)
+KPI (suivis, indexés, non indexés, inconnus de Google, à inspecter, non indexés > 14 j), courbe par jour, tableau par site, liste d'URLs filtrable par état avec « Inspecter » et lien Search Console.
+
+### 3.8 Pinterest (v6, Blotato)
+KPI publiés / échecs / programmés / impressions / clics / enregistrements, publiés par jour, échecs récents, heatmap « Sheet vs Blotato » 14 jours, tableau par compte, posts programmés avec **Reprogrammer** et **Annuler**, meilleurs pins, stats par article.
+
+### 3.9 Assistant et connecteur Claude (v6)
+Bouton flottant « Assistant » (panneau latéral, plein écran sur mobile) : questions en français, réponses en markdown léger, cartes de propositions avec « Exécuter » toujours derrière une confirmation. Dans Connexions : URL du connecteur MCP (masquée, copier, régénérer), état Blotato, consommation de l'assistant.
+
 ## 4. CONTRAT DE DONNÉES (à respecter à la lettre)
 
 Client : `const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, detectSessionInUrl: true } })`.
@@ -139,6 +148,28 @@ Dates au format `YYYY-MM-DD`. « J-1 » = hier (les données GSC ont 2-3 jours d
 | `workflow_health` | — | workflow : `id, name, active, watch, expected_every_min, tags (jsonb []), last_started, last_status, last_success, runs_24h, errors_24h, runs_7d, errors_7d, avg_duration_s, running_now, running_since` |
 | `n8n_daily` | `p_days` | jour : `date, success, failed` |
 | `sync_progress` | — | site : `site_id, queued, running, done, failed, last_error` |
+| `index_summary` | — | site : `site_id, domain, total, indexed, pending, crawled_not_indexed, discovered_not_indexed, unknown, excluded, other, stale_not_indexed, median_days_to_index, inspected_today, last_inspected_at` |
+| `index_list` | `p_site, p_bucket ('not_indexed'|'all'|'indexed'|'pending'|'unknown'|'discovered_not_indexed'|'crawled_not_indexed'|…), p_limit` | URL : `url, article_id, keyword, bucket, verdict, coverage_state, first_seen_at, last_inspected_at, last_crawl_at, indexed_at, google_canonical, inspection_link, error, domain` |
+| `index_timeline` | `p_site, p_days` | jour : `date, seen, indexed` |
+| `blotato_site_stats` | `p_days` | compte : `site, account_id, published, failed, scheduled_next7, impressions, saves, pin_clicks, clicks, ctr, last_published, next_scheduled` |
+| `blotato_calendar` | `p_past, p_next` | compte × jour : `site, day, published, failed, scheduled` |
+| `blotato_reconcile` | `p_next` | compte × jour : `site, day, sheet, blotato` |
+| `blotato_top_pins` | `p_site (slug), p_days, p_order ('impressions'|'clicks'|'saves'|'pin_clicks'), p_limit` | pin : `id, site, created_at, post_url, title, link, article_id, impressions, saves, pin_clicks, clicks, navigations, metrics_at` |
+| `site_overview_range` | `p_from, p_to, p_spark_from?` | comme `site_overview` (précédent = même durée juste avant) |
+| `query_movers_range` | `p_site, p_from, p_to, p_limit` | comme `query_movers` |
+| `n8n_range` | `p_from, p_to` | jour : `date, success, failed` |
+| `index_timeline_range` | `p_site, p_from, p_to` | jour : `date, seen, indexed, inspected` |
+| `index_list_range` | `p_site, p_from, p_to, p_limit` | comme `index_list` + `event` (« nouvel article · indexé · inspecté ») |
+| `blotato_site_stats_range` | `p_from, p_to` | comme `blotato_site_stats` |
+| `blotato_calendar_range` | `p_from, p_to` | comme `blotato_calendar` |
+| `blotato_top_pins_range` | `p_site, p_from, p_to, p_order, p_limit` | comme `blotato_top_pins` |
+| `blotato_volume_reach` | `p_days, p_site (slug)` | jour : `day, pins, accounts, impressions, clicks, saves, impr_per_pin, ctr, mature (publié il y a ≥ 7 j)` |
+| `blotato_account_reach` | — | compte : `site, account_id, pins_7d, per_day_7d, pins_prev, per_day_prev, impr_per_pin_recent, impr_per_pin_before, ctr_recent, clicks_recent, verdict` |
+| `article_link_health` | — | article : `article_id, sheet_url, sheet_key, real_url, http_status, issue ('404'|'erreur'|'lien court'|'redirection')` |
+| `index_trend` | `p_site, p_days` | jour : `day, total, indexed, unknown, rate (0-1)` |
+| `sheet_url_fixes` | `p_site` | article : `article_id, keyword, domain, sheet_url, real_url, http_status, issue, shared_with` (URLs du Sheet ≠ vraie URL) |
+| `pipeline_days` | `p_from, p_to` | jour : `day, first_at, last_at, first_metrics, last_metrics, snapshots` (relevés horaires du Sheet) |
+| `blotato_article_stats` | `p_site (slug), p_limit` | article : `article_id, site, keyword, url, pins, impressions, saves, pin_clicks, clicks, last_pin, indexed` |
 
 ### 4.2 Tables lues ou écrites directement — `sb.from(...)`
 | Table | Lecture | Écriture autorisée |
@@ -153,6 +184,9 @@ Dates au format `YYYY-MM-DD`. « J-1 » = hier (les données GSC ont 2-3 jours d
 | `health_checks` | `id, name, url, expect_status, enabled, last_status, last_ok, last_ms, last_checked_at, last_error` | insert / delete |
 | `settings` | `key, value (jsonb)` | upsert |
 | `pipeline_state` | ligne `id = 1` : `data (jsonb, voir 4.4), ok, error, ms, taken_at` | — |
+| `blotato_schedules` | `id, account_id, site, scheduled_at, link, title, text, article_id` | — (passer par `blotato`) |
+| `blotato_failed` | `id, account_id, site, post_time, error, text` | — |
+| `agent_usage` | `day, prompt_tokens, completion_tokens, calls` | — |
 
 ### 4.3 Edge functions — `sb.functions.invoke(nom, { body })`
 En cas d'erreur, le message est dans `await error.context.json()` → `.error`.
@@ -169,6 +203,15 @@ En cas d'erreur, le message est dans `await error.context.json()` → `.error`.
 | `ops-sync` | `{action:"test_alert"}` | `{ok}` |
 | `pipeline` | `{action:"refresh"}` (10-60 s) | `{ok, ms}` ou `{ok:false, error}` |
 | `pipeline` | `{action:"call", gas:"<action>", params:{…}}` | réponse brute d'Apps Script (voir 4.5) |
+| `index-sync` | `{action:"work"}` (≈ 100 s) | `{seed:{added, impressions_shortcut}, done, failed, errors[], stopped?}` |
+| `index-sync` | `{action:"sitemaps"}` (1-2 min) | `{sitemaps:{[domaine]:{total, added, removed} | {error}}, aliases:{resolved, problems}}` |
+| `index-sync` | `{action:"inspect", url}` | `{ok, url, verdict, coverage_state}` ou `{ok:false, error}` |
+| `blotato` | `{action:"status"}` | `{configured, last_sync}` |
+| `blotato` | `{action:"sync"}` (≤ 2 min) | `{ok, accounts, scheduled, failed, published_seen, details}` ou `{ok:false, error}` |
+| `blotato` | `{action:"reschedule", schedule_id, scheduled_at (ISO, ≥ maintenant + 2 min)}` | `{ok, message}` |
+| `blotato` | `{action:"cancel", schedule_id}` | `{ok, message}` |
+| `agent` | `{messages:[{role, content}], context:{view, site}}` | `{answer (markdown léger), proposals:[{action, params, summary}], steps:[{tool, ok}], usage}` — le front exécute une proposition seulement après confirmation |
+| `control-mcp` | `{action:"info"}` / `{action:"rotate"}` | `{url (secrète), tools[]}` |
 
 ### 4.4 Forme de `pipeline_state.data` (sortie de `dbAggregate_` dans Dashboard.gs)
 ```js

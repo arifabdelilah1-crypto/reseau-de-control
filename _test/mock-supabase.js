@@ -1264,7 +1264,7 @@
   }
   root.supabase = {
     createClient, FunctionsHttpError,
-    __mock: { scenario: SC, db: DB, get sheet() { return SHEET; }, dash: () => (SHEET ? dash() : null), refreshPipeline: () => pipelineRefresh(), delayMs },
+    __mock: { scenario: SC, db: DB, ext: { SCHEMA, RPC, RPC_SIG, FN, HttpError, requireUser, getSetting }, nowIso, get sheet() { return SHEET; }, dash: () => (SHEET ? dash() : null), refreshPipeline: () => pipelineRefresh(), delayMs },
   };
   console.info(`[mock-supabase] scenario=${SC.raw} · ${DB.sites.length} sites · ${DB.n8n_workflows.length} workflows · ${DB.n8n_executions.length} executions · ${SHEET ? SHEET.articles.length + ' articles / ' + SHEET.pins.length + ' pins' : 'no sheet'}`);
 })(typeof window !== 'undefined' ? window : globalThis);

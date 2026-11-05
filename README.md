@@ -1,4 +1,4 @@
-# Réseau DE · Control (v4)
+# Réseau DE · Control (v7)
 
 Un seul dashboard pour tout le système : **SEO (Search Console + GA4)**, **Ops n8n** (exécutions, échecs, services), **alertes Telegram**, et le **pipeline** (dashboard v3 en attendant la migration).
 
@@ -10,6 +10,11 @@ Supabase  kuhxuovjlukxdzjnsyzt (Frankfurt)
    ├─ google-auth   connecter un Gmail → liste auto de tous ses sites GSC + propriétés GA4
    ├─ seo-sync      file d'import : historique 16 mois + mise à jour quotidienne
    ├─ ops-sync      n8n API toutes les 5 min, pings santé, alertes, Telegram
+   ├─ pipeline      pont Apps Script (Sheet toutes les 15 min + actions WF)
+   ├─ index-sync    indexation Google des articles publiés (URL Inspection, toutes les 10 min)
+   ├─ blotato       planning réel, publiés, échecs, stats des pins + reprogrammer / annuler (15 min)
+   ├─ agent         assistant du dashboard (DeepSeek) : lit les données, propose des actions
+   ├─ control-mcp   connecteur Claude (MCP, lecture seule) pour claude.ai
    └─ pg_cron       ops 5 min · worker SEO 2 min · file quotidienne 05:17 UTC
 ```
 
@@ -43,6 +48,8 @@ Dashboard → **Edge Functions → Secrets** :
 | `N8N_API_KEY` | n8n → Settings → **n8n API** → *Create an API key* |
 | `TELEGRAM_BOT_TOKEN` | @BotFather → `/newbot` |
 | `TELEGRAM_CHAT_ID` | envoie un message à ton bot, puis ouvre `https://api.telegram.org/bot<TOKEN>/getUpdates` → `chat.id` |
+| `BLOTATO_API_KEY` | Blotato → Settings → API (clé **régénérée**, l'ancienne a circulé) |
+| `DEEPSEEK_API_KEY` | platform.deepseek.com → API keys (clé **régénérée**) |
 
 Les fonctions lisent les secrets au démarrage : rien à redéployer.
 
@@ -96,6 +103,63 @@ Alertes ajoutées : Apps Script injoignable · échecs articles + images ≥ seu
 
 ---
 
+## 8. Indexation Google (v6)
+
+- Les articles `published` du Sheet sont ajoutés tout seuls à `url_index`. Ceux qui ont déjà des impressions GSC sont marqués indexés **sans** consommer de quota.
+- Le worker inspecte toutes les 10 min, au plus `index_daily_per_site` par site et par jour (défaut 300 ; la limite Google est 2 000). Un article indexé est revérifié tous les 30 jours, un non indexé tous les 2 jours (7 jours s'il a plus de 30 jours).
+- L'API ne permet pas de « Demander l'indexation » : le bouton **GSC** de chaque URL ouvre l'inspection dans Search Console.
+- « Suivi depuis » = date où le dashboard a vu l'URL pour la première fois (le 26/10 pour l'existant), pas la date de publication.
+
+## 9. Pinterest via Blotato (v6)
+
+- La synchro (15 min) lit les comptes, **tous** les posts programmés, les échecs (14 j), les pins publiés et leurs stats (4 comptes par passage, en rotation), puis le lien de 40 pins par passage pour les relier aux articles.
+- **Reprogrammer / Annuler** agissent directement chez Blotato (journal dans `blotato_actions`). Le Sheet n'est **pas** modifié.
+- « Sheet vs Blotato » compare `Planifié pour` (Sheet) et ce qui est réellement programmé chez Blotato, sur 14 jours.
+
+## 10. Assistant (DeepSeek) et connecteur Claude
+
+- **Assistant** : bouton en bas à droite. Il lit les données via 17 outils en lecture seule et **propose** des actions (WF1/2/3, relances, envoi des pins, Blotato, alertes, inspection). Rien ne part sans ton clic « Exécuter » + confirmation. Plafond `agent_daily_tokens` (défaut 400 000 / jour, ≈ quelques centimes).
+- **Connecteur Claude** : Connexions → « Connecteur Claude (MCP) » → copie l'URL → claude.ai **Settings → Connectors → Add custom connector**. Lecture seule. L'URL contient un jeton secret ; « Régénérer » invalide l'ancienne.
+
+## 13. v7 (05/11)
+
+- **Vue d'ensemble → « À faire aujourd'hui »** : 3 à 7 actions calculées sur tes données, chacune avec son bouton :
+  - Blotato expiré, n8n ou site en panne, workflow en échec récent ;
+  - échecs d'articles par cause, portée Pinterest écrasée, comptes sans pin programmé ;
+  - site à 0 indexé, URLs du Sheet en 404 ou `?p=`, chute SEO, sitemap illisible.
+- **Workflows morts** : un échec de plus de 7 jours (workflow qui ne tourne plus) n'est plus « en panne ». Il ne déclenche plus d'alerte critique (ops-sync) et apparaît comme « Ancien échec » dans le dashboard.
+- **Pinterest → « Volume vs portée »** :
+  - pins par semaine, et impressions et clics par pin (pins de plus de 7 jours) ;
+  - tableau par compte (rythme sur 7 jours, impressions par pin récentes vs avant, diagnostic « trop de pins, portée écrasée » / « portée en chute ») ;
+  - RPC `blotato_volume_reach`, `blotato_account_reach`.
+- **Pipeline → Échecs → « Pourquoi ça échoue »** : regroupement par cause (crédit ou clé DeepSeek, WordPress / Wordfence, WF1 en double, mauvais site, doublon d'intention, contrôle qualité, carte recette, réponse coupée, délai), avec la correction à faire.
+- **Badges « page 404 / lien ?p= / redirige »** sur les articles (Pipeline → Articles) et les posts programmés (Pinterest). RPC `article_link_health`.
+- **Indexation → courbe « % indexé »** (relevé horaire `index_daily`, cron `index-snapshot-hourly`) et badge « bloqué » sur un site à 0 article indexé.
+- **Sitemaps** : prise en charge de Yoast, `wp-sitemap.xml` et `sitemap.xml` (Shopify, etc.) avec les index imbriqués. Alerte dédiée `sitemap_error` ; message « site injoignable » quand le domaine ne répond plus en DNS.
+- **Mobile** : la barre du bas défile (7 onglets lisibles).
+- Migration `012_v7_insights.sql`.
+
+## 12. Indexation v2 : la vérité = les sitemaps (30/10)
+
+- Constat : sur 1 371 URLs « publiées » du Sheet, seules 478 étaient les vraies URLs. Les autres :
+  - 383 liens courts `?p=123` ;
+  - d'anciens slugs qui redirigent (slug changé, articles fusionnés en une seule page) ;
+  - des pages en 404.
+  
+  Google ne connaît que l'URL finale : le « 77 % inconnus de Google » venait en grande partie de là.
+- Désormais `url_index` = les URLs des sitemaps d'articles WordPress (995 articles en ligne le 30/10). Les sitemaps sont relus toutes les 6 h, ou via le bouton « Relire les sitemaps ».
+- Les URLs du Sheet vont dans `url_alias` : elles sont vérifiées (redirection + canonique) puis reliées à leur vraie URL, ce qui garde l'article et le mot-clé.
+  - Cron `index-aliases-2min` : 4 requêtes à la fois. Le serveur WordPress sature au-delà : 326 timeouts sur 350 requêtes parallèles.
+- Panneau « URLs du Sheet à corriger » (Indexation) : export CSV, avec la vraie URL à coller dans la colonne URL du Master.
+- Migrations `010_index_truth.sql` et `011_alias_claim_lock.sql`.
+
+## 11. Calendrier (jour ou période)
+
+- Bouton **Calendrier** dans toutes les vues de données : un jour précis ou une période du … au …, avec raccourcis (hier, J-3, ce mois-ci, mois dernier). Le choix suit d'un onglet à l'autre ; la croix ou un bouton « 7 j / 28 j » revient aux jours glissants.
+- Un seul jour : chiffres de ce jour comparés à la veille ; courbes sur les 28 jours précédents avec le jour surligné en jaune.
+- SEO (détail des requêtes : 90 derniers jours ; au-delà, agrégé par mois), Vue d'ensemble, Ops n8n (exécutions par workflow, 60 jours gardés), Indexation (nouveaux, indexés, inspectés + onglet « Activité de la période »), Pinterest (publiés, échecs, stats, meilleurs pins), Pipeline (séries du Sheet sur 30 jours + écarts des relevés horaires depuis le 25/10).
+- Migration `009_date_range.sql` : fonctions « _range » ; les anciennes restent.
+
 ## Données & limites (free plan Supabase, 500 Mo)
 
 | Donnée | Granularité | Durée |
@@ -131,12 +195,18 @@ Chaque nouvelle alerte part sur Telegram une seule fois, plus un message ✅ à 
 ```
 MASTER_PROMPT.md                 brief complet pour redessiner le front (contrat de données inclus)
 index.html                       front (GitHub Pages)
-supabase/migrations/001…005.sql  schéma, fonctions de lecture, file + cron, durcissement, pipeline
+supabase/migrations/001…012.sql  schéma, lecture, file + cron, durcissement, pipeline, indexation, Blotato, agent, calendrier
 supabase/functions/_shared       helpers communs
 supabase/functions/google-auth   OAuth + découverte des sites
 supabase/functions/seo-sync      import GSC / GA4
 supabase/functions/ops-sync      n8n, santé, alertes, Telegram
 supabase/functions/pipeline      pont Apps Script (état du Sheet toutes les 15 min + actions)
+supabase/functions/index-sync    inspection d'URL Search Console
+supabase/functions/blotato       synchro Blotato + reprogrammer / annuler
+supabase/functions/agent         assistant DeepSeek (propose, ne fait rien seul)
+supabase/functions/control-mcp   serveur MCP pour claude.ai (lecture seule)
+supabase/functions/_shared/tools.ts  outils lecture seule communs à l'agent et au MCP
+_test/                           mock Supabase (mock-supabase.js + mock-v6.js) et index-test.html
 ```
 
 Redéployer une fonction avec la CLI : `supabase functions deploy seo-sync --no-verify-jwt --project-ref kuhxuovjlukxdzjnsyzt`

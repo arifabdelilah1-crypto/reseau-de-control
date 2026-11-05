@@ -160,13 +160,14 @@ async function evaluateWorkflowAlerts() {
       await resolveAlert(errFp); await resolveAlert(staleFp); await resolveAlert(stuckFp);
       continue;
     }
-    // last run failed
-    if (w.last_status === "error" || w.last_status === "crashed") {
+    // last run failed — seulement si l'échec est récent (un workflow qui ne tourne plus depuis 7 j n'est pas « en panne »)
+    const recent = w.last_started && Date.now() - new Date(w.last_started).getTime() < 7 * 86400_000;
+    if ((w.last_status === "error" || w.last_status === "crashed") && recent) {
       open++;
       await raiseAlert({ fingerprint: errFp, kind: "wf_error", severity: "crit",
         title: `${w.name} : dernière exécution en échec (${w.errors_24h} erreur(s) / 24 h)`,
         details: { workflow_id: w.id, last_started: w.last_started, errors_24h: w.errors_24h } });
-    } else if (w.last_status === "success") await resolveAlert(errFp);
+    } else if (w.last_status === "success" || !recent) await resolveAlert(errFp);
 
     // stuck run
     if (w.running_since && Date.now() - new Date(w.running_since).getTime() > stuckMin * 60_000) {

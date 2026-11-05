@@ -643,6 +643,25 @@ body:not(:has(#app:not([hidden]))) .agent-fab { display: none; }
 .pcal-pop .hint { margin: 0; }
 .pday-k { margin-bottom: 4px; }
 
+/* ═══════════ v7 ═══════════ */
+.todo { list-style: none; margin: 0; padding: 0; }
+.todo li { display: flex; gap: 12px; align-items: center; padding: 11px 14px; border-top: 1px solid var(--line); }
+.todo li:first-child { border-top: 0; }
+.todo li .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.todo li .t .small { color: var(--ink-2); overflow-wrap: anywhere; }
+.todo li.crit { box-shadow: inset 3px 0 0 var(--crit); }
+.todo li.warn { box-shadow: inset 3px 0 0 var(--warn); }
+.causes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.cause { padding: 12px 14px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.cause-h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .mnav { display: flex !important; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .mnav::-webkit-scrollbar { display: none; }
+  .mnav a { flex: 0 0 auto; min-width: 68px; padding: 0 6px; }
+  .todo li { flex-wrap: wrap; }
+  .todo li .btn { margin-left: 28px; }
+}
+
 /* Démarrage */
 .boot-card { width: min(360px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .boot-card p { padding: 14px 22px 16px; color: var(--ink-3); font-size: 13.5px; }
@@ -952,6 +971,10 @@ const ALERT_KINDS = {
 };
 const SEV = { crit: "Critique", warn: "À surveiller", info: "Info" };
 const isFailStatus = (s) => s === "error" || s === "crashed";
+/** Échec qui compte : dernière exécution en échec ET récente (< 7 j). Un workflow qui ne tourne plus n'est pas « en panne ». */
+const WF_RECENT_MS = 7 * 864e5;
+const wfFailing = (w) => isFailStatus(w?.last_status) && !!w?.last_started && Date.now() - new Date(w.last_started).getTime() < WF_RECENT_MS;
+const wfOldFail = (w) => isFailStatus(w?.last_status) && !wfFailing(w);
 
 /* ═══════════ Blocs : chargement, vide, erreur ═══════════ */
 const skelRows = (n = 5) => `<div class="skel-rows" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<span class="skel" style="width:${92 - ((i * 17) % 35)}%"></span>`).join("")}</div><span class="sr-only">Chargement…</span>`;
@@ -1440,7 +1463,7 @@ const Health = {
     if (!r.wf.ok) out.n8n = { tone: "off", text: "indisponible" };
     else {
       const watched = r.wf.data.filter((w) => w.watch && w.active);
-      const failing = watched.filter((w) => isFailStatus(w.last_status));
+      const failing = watched.filter(wfFailing);
       const soft = kinds(["wf_stuck", "wf_stale"]);
       if (kinds("n8n_api").length) out.n8n = { tone: "crit", text: "API injoignable" };
       else if (!r.wf.data.length) out.n8n = { tone: "off", text: "pas encore synchronisé" };
@@ -1913,13 +1936,13 @@ function wfTone(list) {
   if (!list.length) return null;
   const act = list.filter((w) => w.active);
   if (!act.length) return "off";
-  if (act.some((w) => isFailStatus(w.last_status))) return "crit";
+  if (act.some(wfFailing)) return "crit";
   if (act.some((w) => num(w.running_now) > 0)) return "run";
   if (act.some((w) => num(w.errors_24h) > 0)) return "warn";
   if (act.some((w) => w.last_status === "success" || w.last_success)) return "ok";
   return "off";
 }
-const wfLabel = (w) => `${w.name} : ${!w.active ? "inactif" : num(w.running_now) > 0 ? "en cours" : isFailStatus(w.last_status) ? "dernière exécution en échec" : w.last_status === "success" ? "OK" : w.last_status || "aucune exécution"}${w.last_success ? `, dernier succès ${rel(w.last_success)}` : ""}`;
+const wfLabel = (w) => `${w.name} : ${!w.active ? "inactif" : num(w.running_now) > 0 ? "en cours" : wfFailing(w) ? "dernière exécution en échec" : wfOldFail(w) ? `ancien échec (${fmtAbs(w.last_started)}), ne tourne plus` : w.last_status === "success" ? "OK" : w.last_status || "aucune exécution"}${w.last_success ? `, dernier succès ${rel(w.last_success)}` : ""}`;
 
 /** Construit les 7 stations de la ligne à partir du Sheet, de n8n, des services et du SEO. */
 function buildLine({ row, wfs, hc, seo }) {
@@ -2092,7 +2115,7 @@ Views.overview = {
 
     /* Instruments */
     const watched = wfs.filter((w) => w.watch && w.active);
-    const red = watched.filter((w) => isFailStatus(w.last_status));
+    const red = watched.filter(wfFailing);
     const errs24 = sum(watched, "errors_24h");
     const seoSub = noSeo ? `<a href="${Router.href("settings")}" data-nav="settings">connecter Google</a>` : "";
     $("#ov-kpis", el).innerHTML = !r.cur.ok ? panel({ body: errBox(r.cur.error) }) : kpis([
@@ -2647,6 +2670,7 @@ function opsWfState(w) {
   if (!w.active) return ["off", "Inactif"];
   if (num(w.running_now) > 0) return ["run", "En cours"];
   if (w.last_status == null || w.last_status === "") return ["off", "Pas d'exécution"];
+  if (wfOldFail(w)) return ["off", "Ancien échec"];
   return opsExecState(w.last_status);
 }
 /** Tri par défaut : en échec d'abord, inactifs en dernier. */
@@ -2757,7 +2781,7 @@ function opsKpis(el, r) {
     const wfs = r.wf.data || [];
     const active = wfs.filter((w) => w.active);
     const watched = active.filter((w) => w.watch);
-    const failing = watched.filter((w) => isFailStatus(w.last_status));
+    const failing = watched.filter(wfFailing);
     const runs = sum(watched, "runs_24h"), errs = sum(watched, "errors_24h");
     const running = sum(wfs, "running_now");
     const oldest = wfs.filter((w) => num(w.running_now) > 0).map((w) => w.running_since).filter(Boolean).sort()[0];
@@ -3674,7 +3698,7 @@ function ptaDrawList(root, list) {
       { key: "kw", label: "Mot-clé", cls: "maxw", value: (r) => ptaStr(r.kw), csv: (r) => ptaStr(r.kw),
         render: (r) => {
           const kw = ptaStr(r.kw) || "—", url = ptaStr(r.url).trim();
-          return /^https?:\/\//i.test(url) ? `<a class="trunc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(url)}">${esc(kw)}</a>` : `<span class="trunc" title="${esc(kw)}">${esc(kw)}</span>`;
+          return (/^https?:\/\//i.test(url) ? `<a class="trunc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(url)}">${esc(kw)}</a>` : `<span class="trunc" title="${esc(kw)}">${esc(kw)}</span>`) + LinkHealth.forArticle(r.id);
         } },
       ptaStatusCol("st", "Statut"),
       { key: "im", label: "Images", value: (r) => num(r.imgs), csv: (r) => [ptaStr(r.im), numOrNull(r.imgs) != null ? `${num(r.imgs)} images` : ""].filter(Boolean).join(" · "),
@@ -5457,6 +5481,7 @@ Views.index = {
         <div class="filters">
           <select id="idx-site" aria-label="Site"><option value="">Tous les sites suivis</option></select>
           ${Period.ctl()}
+          <button class="btn" type="button" id="idx-sm" title="Relit les sitemaps WordPress des 13 sites et vérifie les URLs du Sheet (sinon toutes les 6 h)">${icon("table")}<span>Relire les sitemaps</span></button>
           <button class="btn" type="button" id="idx-work" title="Inspecte un lot d'URLs maintenant (sinon toutes les 10 min)">${icon("sync")}<span>Inspecter un lot</span></button>
         </div>
       </div>
@@ -5476,7 +5501,15 @@ Views.index = {
         ${panel({ title: "URLs", meta: `<span id="idx-list-meta"></span>`, flush: true,
           tools: `<input type="search" class="sm" id="idx-q" placeholder="Filtrer URL ou mot-clé" aria-label="Filtrer les URLs" autocomplete="off" style="width:180px">${csvBtn("idx-list")}`,
           body: `<div class="chips" id="idx-buckets" style="padding:10px 14px;border-bottom:1px solid var(--line)">${IDX_BUCKETS.map((x) => `<button type="button" class="chip" data-bucket="${x.b}" aria-pressed="${x.b === IdxState.bucket}">${esc(x.t)}</button>`).join("")}</div><div id="idx-list">${skelRows(10)}</div>` })}
+        ${panel({ title: "URLs du Sheet à corriger", meta: `<span id="idx-fix-meta"></span>`, flush: true, tools: csvBtn("idx-fix"), body: `<div id="idx-fix">${skelRows(6)}</div>`,
+          note: "La colonne URL du Master ne correspond pas toujours à l'article réellement publié : lien court ?p=, ancien slug qui redirige, ou page supprimée. Corrige la colonne URL avec la « vraie URL » (export CSV) : les pins et le maillage pointeront enfin vers la bonne page. « Même page » = plusieurs articles du Sheet aboutissent à la même URL (doublons fusionnés dans WordPress)." })}
       </div>`;
+    $("#idx-sm", el).addEventListener("click", (e) => act(e.currentTarget, {
+      confirm: { title: "Relire les sitemaps maintenant ?", body: "Lit le sitemap d'articles des 13 sites (la vérité sur ce qui est publié), puis vérifie un lot d'URLs du Sheet. 1 à 2 minutes.", ok: "Relire" },
+      run: () => fn("index-sync", { action: "sitemaps" }),
+      ok: (r) => { const s = Object.values(r?.sitemaps || {}); const n = s.reduce((a, x) => a + (Number(x?.total) || 0), 0), err = s.filter((x) => x?.error).length; return `${fmtFull(n)} articles dans les sitemaps${err ? ` · ${err} site(s) en erreur` : ""} · ${fmtFull(r?.aliases?.resolved || 0)} URL(s) du Sheet vérifiée(s)`; },
+      after: () => { Store.drop("idx"); Router.render({ silent: true, force: true }); },
+    }));
     $("#idx-site", el).addEventListener("change", (e) => { IdxState.site = e.target.value; Router.setParams({ site: IdxState.site }); Router.render({ silent: true }); });
     $("#idx-q", el).addEventListener("input", () => idxDrawList());
     $("#idx-work", el).addEventListener("click", (e) => act(e.currentTarget, {
@@ -5529,9 +5562,9 @@ Views.index = {
     const notIdx = total - indexed - pending;
     const inspected = total - pending;
     if (!r.sum.ok) $("#idx-kpis", el).innerHTML = errBox(r.sum.error);
-    else if (!total) $("#idx-kpis", el).innerHTML = emptyBox("Aucune URL suivie pour l'instant", "Les articles publiés du Sheet (Pipeline) sont ajoutés automatiquement toutes les 10 min. Vérifie que le Pipeline est lu.");
+    else if (!total) $("#idx-kpis", el).innerHTML = emptyBox("Aucune URL suivie pour l'instant", "Les articles des sitemaps WordPress sont relus toutes les 6 h. Vérifie que le Pipeline est lu.");
     else $("#idx-kpis", el).innerHTML = kpis([
-      kpi({ label: "Articles publiés suivis", value: fmt(total), sub: `${fmtFull(inspected)} inspectés` }),
+      kpi({ label: "Articles en ligne (sitemaps)", value: fmt(total), sub: `${fmtFull(inspected)} inspectés` }),
       kpi({ label: "Indexés", value: fmt(indexed), sub: inspected ? `${pct(indexed, inspected)} des inspectés` : "", tone: indexed ? "" : "warn" }),
       kpi({ label: "Non indexés", value: fmt(notIdx), sub: inspected ? `${pct(notIdx, inspected)} des inspectés` : "", tone: notIdx ? "crit" : "" }),
       kpi({ label: "Inconnus de Google", value: fmt(unknown), sub: "jamais vus par Google", tone: unknown ? "crit" : "" }),
@@ -5568,7 +5601,7 @@ Views.index = {
       onRow: (s) => { IdxState.site = s.site_id; Router.setParams({ site: s.site_id }); Router.render({ silent: true }); },
       rowTitle: () => "Filtrer sur ce site",
       cols: [
-        { key: "domain", label: "Site", render: (s) => `<span class="cell-main">${esc(s.domain)}</span>` },
+        { key: "domain", label: "Site", render: (s) => `<span class="cell-main">${esc(s.domain)}</span>${num(s.total) >= 20 && num(s.indexed) === 0 && num(s.pending) < num(s.total) ? ` <span class="tag t-crit" title="Aucun article indexé : vérifie Search Console (actions manuelles, exploration) et la vitesse du serveur">bloqué</span>` : ""}` },
         { key: "total", label: "Suivis", r: 1, num: 1, value: (s) => num(s.total), render: (s) => fmtFull(s.total) },
         { key: "rate", label: "Indexés", r: 1, num: 1, value: (s) => { const i = num(s.total) - num(s.pending); return i ? num(s.indexed) / i : null; },
           csv: (s) => num(s.indexed), render: (s) => { const i = num(s.total) - num(s.pending); return `<b>${fmtFull(s.indexed)}</b> <span class="muted small">${i ? pct(s.indexed, i) : "—"}</span>`; } },
@@ -5584,6 +5617,7 @@ Views.index = {
     });
     $("#idx-sites-meta", el).textContent = all.length ? `${plural(all.length, "site", "sites")}${IdxState.site ? " · clic sur une ligne = filtrer" : " · clic = filtrer"}` : "";
     await idxLoadList(force);
+    await idxLoadFixes(force);
   },
 };
 let idxRows = [];
@@ -5597,6 +5631,29 @@ async function idxLoadList(force) {
       : await Store.get(`idx:list:${IdxState.site}:${IdxState.bucket === "period" ? "not_indexed" : IdxState.bucket}`, () => rpc("index_list", { p_site: IdxState.site || null, p_bucket: IdxState.bucket === "period" ? "not_indexed" : IdxState.bucket, p_limit: 1000 }), { force });
     idxDrawList();
   } catch (e) { box.innerHTML = errBox(e); }
+}
+async function idxLoadFixes(force) {
+  const el = $('main.main > section[data-view="index"]'); if (!el) return;
+  const box = $("#idx-fix", el);
+  let rows = [];
+  try { rows = await Store.get(`idx:fix:${IdxState.site}`, () => rpc("sheet_url_fixes", { p_site: IdxState.site || null }), { force }); }
+  catch (e) { box.innerHTML = errBox(e); return; }
+  const by = (k) => rows.filter((r) => r.issue === k).length;
+  const pend = by("pas encore vérifiée");
+  $("#idx-fix-meta", el).textContent = rows.length ? `${fmtFull(rows.length - pend)} à corriger${pend ? ` · ${fmtFull(pend)} pas encore vérifiées (le worker avance toutes les 10 min)` : ""}` : "";
+  const tone = { "page introuvable (404)": "crit", "erreur serveur": "crit", "URL finale absente du sitemap": "warn", "lien court ?p= au lieu de la vraie URL": "warn", "redirige vers une autre URL (slug changé)": "warn", "pas encore vérifiée": "off" };
+  mountTable(box, {
+    id: "idx-fix", rows, limit: 50, scrollY: true, csvName: "urls-sheet-a-corriger", sort: { key: "issue", dir: "asc" },
+    empty: `<div class="empty">${stateTag("ok", "Toutes les URLs du Sheet sont les vraies URLs")}</div>`,
+    cols: [
+      { key: "article_id", label: "Article", value: (r) => r.article_id || "", render: (r) => `<span class="cell-main mono">${esc(r.article_id || "—")}</span><span class="cell-sub">${esc(r.keyword || "")}</span>` },
+      { key: "domain", label: "Site", render: (r) => esc(String(r.domain || "").replace(/\.(blog|online)$/, "")) },
+      { key: "sheet_url", label: "URL dans le Sheet", value: (r) => r.sheet_url, csv: (r) => r.sheet_url, render: (r) => `<span class="trunc mono small" style="max-width:260px" title="${esc(r.sheet_url)}">${esc(v6Short(r.sheet_url))}</span>` },
+      { key: "real_url", label: "Vraie URL", value: (r) => r.real_url || "", csv: (r) => r.real_url || "", render: (r) => (r.real_url ? `<a class="trunc small" style="max-width:280px" href="${esc(r.real_url)}" target="_blank" rel="noopener" title="${esc(r.real_url)}">${esc(v6Short(r.real_url))}</a>` : `<span class="muted">—</span>`) },
+      { key: "issue", label: "Problème", value: (r) => r.issue, render: (r) => stateTag(tone[r.issue] || "warn", r.issue, r.http_status ? `HTTP ${r.http_status}` : "") },
+      { key: "shared_with", label: "Même page", r: 1, num: 1, value: (r) => num(r.shared_with), render: (r) => (num(r.shared_with) ? `<span class="t-crit" title="${esc(`${r.shared_with} autre(s) article(s) du Sheet aboutissent à cette page`)}">+${fmtFull(r.shared_with)}</span>` : `<span class="muted">0</span>`) },
+    ],
+  });
 }
 function idxDrawList() {
   const el = $('main.main > section[data-view="index"]'); if (!el) return;
@@ -5847,7 +5904,7 @@ function pinDrawSched() {
       { key: "scheduled_at", label: "Programmé", value: (x) => x.scheduled_at, csv: (x) => x.scheduled_at, render: (x) => `<span class="cell-main mono">${esc(fmtAbs(x.scheduled_at))}</span><span class="cell-sub">${esc(rel(x.scheduled_at))}</span>` },
       { key: "site", label: "Compte", render: (x) => esc(x.site || x.account_id) },
       { key: "title", label: "Pin", value: (x) => x.title || x.text || "", csv: (x) => x.title || "",
-        render: (x) => `<span class="cell-main trunc" style="max-width:320px" title="${esc(x.text || "")}">${esc(x.title || String(x.text || "").slice(0, 80) || "—")}</span>${x.link ? `<span class="cell-sub"><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(v6Short(x.link).slice(0, 60))}</a>${x.article_id ? ` · ${esc(x.article_id)}` : ""}</span>` : ""}` },
+        render: (x) => `<span class="cell-main trunc" style="max-width:320px" title="${esc(x.text || "")}">${esc(x.title || String(x.text || "").slice(0, 80) || "—")}</span>${LinkHealth.forLink(x.link)}${x.link ? `<span class="cell-sub"><a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(v6Short(x.link).slice(0, 60))}</a>${x.article_id ? ` · ${esc(x.article_id)}` : ""}</span>` : ""}` },
       { key: "act", label: "Actions", th: `<span class="sr-only">Actions</span>`, sort: false, csv: false, r: 1,
         render: (x) => `<span class="btn-row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap">
           <button class="btn sm" type="button" data-pin-move="${esc(x.id)}" data-at="${esc(x.scheduled_at)}">Reprogrammer</button>
@@ -6064,6 +6121,207 @@ function stDrawMcp(info) {
   </div>`;
 }
 
+
+/* ═══════════ v7 : À faire aujourd'hui · Volume vs portée · échecs par cause · liens cassés · tendance d'indexation ═══════════ */
+ALERT_KINDS.sitemap_error = { label: "Sitemap", view: "index" };
+ALERT_KINDS.index_stale = ALERT_KINDS.index_stale || { label: "Indexation", view: "index" };
+
+/* ── Santé des liens du Sheet (url_alias) : 404, lien court ?p=, redirection ── */
+const urlKey = (u) => String(u || "").toLowerCase().replace(/^[a-z]+:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+const LinkHealth = {
+  byKey: new Map(), byArticle: new Map(), loaded: false, count: { "404": 0, "lien court": 0, redirection: 0, erreur: 0 },
+  async load(force) {
+    try {
+      const rowsL = await Store.get("link_health", () => rpc("article_link_health"), { force, ttl: 10 * 60_000 });
+      this.byKey = new Map(); this.byArticle = new Map(); this.count = { "404": 0, "lien court": 0, redirection: 0, erreur: 0 };
+      (rowsL || []).forEach((r) => { if (!r.issue) return; this.byKey.set(r.sheet_key, r); if (r.article_id) this.byArticle.set(r.article_id, r); this.count[r.issue] = (this.count[r.issue] || 0) + 1; });
+      this.loaded = true;
+    } catch (_) { /* badge facultatif : jamais bloquant */ }
+    return this;
+  },
+  badge(r) {
+    if (!r) return "";
+    const tone = r.issue === "404" || r.issue === "erreur" ? "t-crit" : "";
+    const txt = r.issue === "404" ? "page 404" : r.issue === "erreur" ? "erreur serveur" : r.issue === "lien court" ? "lien ?p=" : "redirige";
+    return ` <span class="tag ${tone}" title="${esc(`URL du Sheet : ${r.sheet_url}${r.real_url ? `\nVraie URL : ${r.real_url}` : ""}`)}">${esc(txt)}</span>`;
+  },
+  forLink(link) { return this.badge(this.byKey.get(urlKey(String(link || "").split("#")[0].replace(/[?&]utm_[^&]*/g, "").replace(/\?$/, "")))); },
+  forArticle(id) { return this.badge(this.byArticle.get(String(id || ""))); },
+};
+
+/* ── Échecs d'articles regroupés par cause ── */
+const FAIL_CAUSES = [
+  { k: "deepseek_pay", re: /payment required|insufficient balance|\b402\b/i, t: "Crédit DeepSeek épuisé", tone: "crit", fix: "Recharge le compte DeepSeek (platform.deepseek.com → Top up), puis « Relancer les échecs »." },
+  { k: "wp", re: /wordpress|wp[- ]?json|rest_|application password|mot de passe d'application|wordfence/i, t: "Publication WordPress refusée", tone: "crit", fix: "Vérifie l'Application Password du site (onglet Sites du Sheet) et la liste blanche Wordfence / pare-feu." },
+  { k: "deepseek_auth", re: /deepseek[^]*?(authorization|401|invalid|credentials)|authorization failed - please check your credentials/i, t: "Clé DeepSeek refusée", tone: "crit", fix: "Vérifie la clé DeepSeek dans les credentials n8n de WF1 (clé régénérée ?)." },
+  { k: "lock", re: /verrou|r[ée]servation reprise/i, t: "WF1 tourne en double", tone: "warn", fix: "Deux exécutions de WF1 se marchent dessus : mets WF1 à 1 exécution à la fois (pas de déclencheur en parallèle)." },
+  { k: "cluster", re: /post du cluster|cluster [^ ]+ ≠/i, t: "Article lié au mauvais site", tone: "warn", fix: "Le contrôle avant publication a bloqué un article d'un autre site (bonne protection). Relance : il sera réécrit pour le bon site." },
+  { k: "dup", re: /doublon d'intention|duplicate intent/i, t: "Doublon avec un autre site du réseau", tone: "info", fix: "Le mot-clé existe déjà ailleurs dans le réseau : change le mot-clé dans le Master ou supprime la ligne (sinon cannibalisation)." },
+  { k: "quality", re: /refus qualit[ée]|mot r[ée]serv[ée]/i, t: "Refusé par le contrôle qualité", tone: "warn", fix: "Le texte contient un mot interdit (ex. dans le H1) : relance, ou ajuste la règle si elle est trop stricte." },
+  { k: "card", re: /carte|CARTE_|WPRM|ingr[ée]dient/i, t: "Carte recette incomplète", tone: "warn", fix: "DeepSeek a rendu une carte recette invalide : relance simple." },
+  { k: "empty", re: /r[ée]ponse vide|finish_reason=length|max_tokens/i, t: "Réponse du modèle coupée", tone: "warn", fix: "Le texte a dépassé la limite de tokens : relance (ou monte max_tokens dans WF1)." },
+  { k: "timeout", re: /timeout|timed out|ETIMEDOUT|socket hang up|ECONNRESET|exceeded/i, t: "Délai dépassé", tone: "warn", fix: "Erreur réseau ou modèle lent : relance." },
+];
+function failCauses(list) {
+  const groups = new Map();
+  (list || []).forEach((r) => {
+    const e = ptaStr(r?.error);
+    const c = FAIL_CAUSES.find((x) => x.re.test(e)) || { k: "other", t: "Autre erreur", tone: "warn", fix: "Regarde le détail de l'erreur dans la liste." };
+    const g = groups.get(c.k) || { ...c, n: 0, sites: new Set(), sample: e };
+    g.n++; if (r?.site) g.sites.add(r.site); groups.set(c.k, g);
+  });
+  return [...groups.values()].sort((a, b) => (a.tone === "crit" ? 0 : 1) - (b.tone === "crit" ? 0 : 1) || b.n - a.n);
+}
+function failCausesPanel(list) {
+  const g = failCauses(list);
+  if (!g.length) return "";
+  return panel({ title: "Pourquoi ça échoue", meta: `${fmtFull(list.length)} article(s) en échec, regroupés par cause`, flush: true, body: `<div class="causes">${g.map((c) => `
+    <div class="cause ${c.tone}"><div class="cause-h">${stateTag(c.tone, c.t)}<b class="num">${fmtFull(c.n)}</b><span class="small muted">${esc([...c.sites].slice(0, 6).join(", "))}${c.sites.size > 6 ? "…" : ""}</span></div>
+      <div class="small">${esc(c.fix)}</div><div class="small muted trunc" title="${esc(c.sample)}">« ${esc(c.sample.slice(0, 140))} »</div></div>`).join("")}</div>` });
+}
+
+/* ── Pipeline → Échecs : causes en tête ── */
+(() => {
+  const r0 = PipeTabs.fails.render;
+  PipeTabs.fails.render = function (d, el) {
+    r0.call(this, d, el);
+    const fa = ptaRows(ptaObj(d.articles).failedList);
+    const first = $(".panel", el);
+    if (first && fa.length) first.insertAdjacentHTML("afterend", failCausesPanel(fa));
+  };
+})();
+
+/* ── Vue d'ensemble : « À faire aujourd'hui » ── */
+async function ovTodo(el, ctx) {
+  const box = $("#ov-todo", el); if (!box) return;
+  const r = await settle({
+    alerts: () => Data.openAlerts({ force: ctx.force }),
+    pipe: () => Data.pipelineState({ force: ctx.force }),
+    reach: () => Store.get("acc_reach", () => rpc("blotato_account_reach"), { force: ctx.force, ttl: 10 * 60_000 }),
+    idx: () => Store.get("idx:sum", () => rpc("index_summary"), { force: ctx.force, ttl: 60_000 }),
+    links: () => LinkHealth.load(ctx.force),
+    wf: () => Data.workflowHealth({ force: ctx.force }),
+  });
+  if (!ctx.alive()) return;
+  const A = r.alerts.ok ? r.alerts.data || [] : [];
+  const by = (k) => A.filter((a) => a.kind === k);
+  const todo = [];
+  const add = (tone, title, text, href, btn = "Ouvrir") => todo.push({ tone, title, text, href, btn });
+  const blot = by("blotato_api")[0];
+  if (blot) add("crit", "Blotato ne répond plus", /expired|subscription/i.test(JSON.stringify(blot.details || "")) ? "Abonnement Blotato expiré : plus aucun pin ne part. Renouvelle-le puis « Synchroniser Blotato »." : esc(blot.details?.error || blot.title), Router.href("pinterest"));
+  if (by("n8n_api").length) add("crit", "n8n injoignable", "L'API n8n ne répond plus : vérifie le serveur n8n.", Router.href("ops"));
+  by("health_down").slice(0, 3).forEach((a) => add("crit", a.title, esc(a.details?.url || ""), Router.href("ops")));
+  const wfs = r.wf.ok ? (r.wf.data || []).filter((w) => w.watch && w.active && wfFailing(w)) : [];
+  if (wfs.length) add("crit", `${plural(wfs.length, "workflow en échec", "workflows en échec")}`, esc(wfs.map((w) => w.name).join(" · ").slice(0, 180)), Router.href("ops"));
+  const fa = r.pipe.ok ? ptaRows(ptaObj(r.pipe.data?.data?.articles).failedList) : [];
+  failCauses(fa).slice(0, 2).forEach((c) => add(c.tone, `${fmtFull(c.n)} article(s) : ${c.t}`, esc(c.fix), Router.href("pipeline", { tab: "fails" })));
+  const crushed = r.reach.ok ? (r.reach.data || []).filter((x) => x.site && /trop de pins|chute/.test(x.verdict || "")) : [];
+  if (crushed.length >= 3) add("warn", `Pinterest : portée écrasée sur ${crushed.length} comptes`, `Rythme moyen ${fmtDec(sum(crushed, "per_day_7d") / crushed.length)} pins/jour/compte, ${fmtDec(sum(crushed, (x) => num(x.impr_per_pin_recent)) / crushed.length)} impressions/pin contre ${fmtDec(sum(crushed, (x) => num(x.impr_per_pin_before)) / crushed.length)} avant. Baisse à 4-5 pins/jour/compte (Planificateur).`, Router.href("pinterest"));
+  const gaps = by("blotato_gap");
+  if (gaps.length) add("warn", `${plural(gaps.length, "compte", "comptes")} sans rien de programmé (24 h)`, esc(gaps.map((a) => a.title.split(" :")[0]).join(", ")), Router.href("pipeline", { tab: "planner" }), "Planifier");
+  const idx = r.idx.ok ? (r.idx.data || []) : [];
+  idx.filter((s) => num(s.total) >= 20 && num(s.indexed) === 0 && num(s.pending) < num(s.total)).forEach((s) => add("warn", `${s.domain} : 0 article indexé sur ${fmtFull(s.total)}`, "Vérifie Search Console (actions manuelles, exploration) et la vitesse du serveur.", Router.href("index", { site: s.site_id })));
+  const n404 = LinkHealth.count["404"] || 0, nShort = LinkHealth.count["lien court"] || 0;
+  if (n404 + nShort) add("warn", `${fmtFull(n404)} articles du Sheet en 404 · ${fmtFull(nShort)} liens ?p=`, "Les pins et le maillage pointent vers de mauvaises URLs : corrige la colonne URL du Master (export CSV dans Indexation).", Router.href("index"), "Voir la liste");
+  by("seo_drop").slice(0, 2).forEach((a) => add("warn", a.title, "Baisse de clics Google sur 7 jours.", Router.href("seo", { site: a.details?.site_id })));
+  if (by("sitemap_error").length) add("info", `${plural(by("sitemap_error").length, "sitemap illisible", "sitemaps illisibles")}`, esc(by("sitemap_error").map((a) => a.title.split(" :")[0]).join(", ")), Router.href("index"));
+  const order = { crit: 0, warn: 1, info: 2 };
+  todo.sort((a, b) => order[a.tone] - order[b.tone]);
+  box.innerHTML = panel({ title: "À faire aujourd'hui", meta: todo.length ? `${plural(todo.length, "point", "points")} · calculé sur tes données` : "", cls: todo.some((t) => t.tone === "crit") ? "crit" : "", flush: true,
+    body: todo.length ? `<ol class="todo">${todo.slice(0, 7).map((t) => `<li class="${t.tone}">${lamp(t.tone === "info" ? "off" : t.tone)}<div class="t"><b>${esc(t.title)}</b><span class="small">${t.text}</span></div><a class="btn sm" href="${t.href}">${esc(t.btn)}</a></li>`).join("")}</ol>${todo.length > 7 ? `<p class="hint" style="padding:0 14px 12px">+ ${todo.length - 7} autre(s) dans Ops n8n → Alertes.</p>` : ""}`
+      : `<div class="empty">${stateTag("ok", "Rien d'urgent")}<div>Tout tourne : pas d'abonnement expiré, pas de workflow en panne, pas de chute de portée.</div></div>` });
+}
+(() => {
+  const i0 = Views.overview.init, l0 = Views.overview.load;
+  Views.overview.init = function (el) { i0.call(this, el); $("#ov-alerts", el).insertAdjacentHTML("beforebegin", `<div id="ov-todo">${panel({ title: "À faire aujourd'hui", body: skelRows(3) })}</div>`); };
+  Views.overview.load = async function (ctx) { await Promise.all([l0.call(this, ctx), ovTodo(ctx.el, ctx)]); };
+})();
+
+/* ── Pinterest : Volume vs portée ── */
+(() => {
+  const i0 = Views.pinterest.init, l0 = Views.pinterest.load;
+  Views.pinterest.init = function (el) {
+    i0.call(this, el);
+    $("#pin-kpis", el).insertAdjacentHTML("afterend", `<div class="grid g-2" id="pin-vr">
+        ${chartPanel({ id: "pin-vr-vol", title: "Volume · pins publiés par semaine", legend: [{ label: "Pins publiés", color: "--series-1", kind: "sq" }] })}
+        ${chartPanel({ id: "pin-vr-reach", title: "Portée · impressions et clics par pin", legend: [{ label: "Impressions / pin", color: "--series-2" }, { label: "Clics / 100 pins", color: "--good" }] })}
+      </div>
+      ${panel({ title: "Rythme et portée par compte", meta: `<span id="pin-vr-meta"></span>`, flush: true, tools: csvBtn("pin-vr-acc"), body: `<div id="pin-vr-acc">${skelRows(6)}</div>`,
+        note: "Portée mesurée sur les pins « mûrs » (publiés il y a 7 à 35 jours, leurs stats sont stables), comparée aux pins publiés il y a 35 à 90 jours. Au-delà d'environ 8 pins/jour/compte, Pinterest coupe la diffusion de chaque pin : mieux vaut 4-5 pins frais par jour." })}`);
+  };
+  Views.pinterest.load = async function (ctx) {
+    const site = ctx.params.site || null;
+    await Promise.all([l0.call(this, ctx), (async () => {
+      const r = await settle({
+        vr: () => Store.get(`pin:vr:${site}`, () => rpc("blotato_volume_reach", { p_days: 120, p_site: site }), { force: ctx.force }),
+        acc: () => Store.get("acc_reach", () => rpc("blotato_account_reach"), { force: ctx.force, ttl: 10 * 60_000 }),
+      });
+      if (!ctx.alive()) return;
+      const el = ctx.el;
+      if (!r.vr.ok) { Charts.error("pin-vr-vol", r.vr.error); Charts.error("pin-vr-reach", r.vr.error); }
+      else {
+        const wk = new Map();
+        (r.vr.data || []).forEach((x) => {
+          const d = dayDate(String(x.day).slice(0, 10)); const dow = (d.getUTCDay() + 6) % 7; const k = addDays(String(x.day).slice(0, 10), -dow);
+          const o = wk.get(k) || { pins: 0, impr: 0, clicks: 0, mpins: 0 }; o.pins += num(x.pins);
+          if (x.mature) { o.mpins += num(x.pins); o.impr += num(x.impressions); o.clicks += num(x.clicks); }
+          wk.set(k, o);
+        });
+        const labels = [...wk.keys()].sort();
+        Charts.bar("pin-vr-vol", { title: "Pins publiés par semaine", labels, int: true, band: false, series: [{ label: "Pins publiés", data: labels.map((k) => wk.get(k).pins), color: "--series-1" }],
+          empty: { title: "Aucun pin publié", text: "Rien chez Blotato sur la période." } });
+        Charts.line("pin-vr-reach", { title: "Portée par pin", labels, band: false, series: [
+          { label: "Impressions / pin", data: labels.map((k) => (wk.get(k).mpins ? +(wk.get(k).impr / wk.get(k).mpins).toFixed(1) : null)), color: "--series-2" },
+          { label: "Clics / 100 pins", data: labels.map((k) => (wk.get(k).mpins ? +((100 * wk.get(k).clicks) / wk.get(k).mpins).toFixed(1) : null)), color: "--good" }],
+          empty: { title: "Pas encore de stats mûres", text: "Il faut des pins publiés il y a plus de 7 jours." } });
+        const mt = $("#meta-pin-vr-reach", el); if (mt) mt.textContent = "semaine de publication · pins de plus de 7 jours";
+      }
+      const box = $("#pin-vr-acc", el);
+      if (!r.acc.ok) { box.innerHTML = errBox(r.acc.error); return; }
+      const list = (r.acc.data || []).filter((x) => x.site || num(x.pins_7d) || num(x.pins_prev)).filter((x) => !site || x.site === site);
+      const bad = list.filter((x) => /trop de pins|chute/.test(x.verdict || "")).length;
+      $("#pin-vr-meta", el).innerHTML = bad ? `<span class="t-crit">${plural(bad, "compte", "comptes")} en surrégime</span>` : "aucun compte en surrégime";
+      const tone = (v) => (/trop de pins/.test(v) ? "crit" : /chute/.test(v) ? "warn" : /aucun/.test(v) ? "off" : "ok");
+      mountTable(box, { id: "pin-vr-acc", rows: list, sort: { key: "per_day_7d", dir: "desc" }, csvName: "pinterest-rythme-portee",
+        onRow: (x) => { if (x.site) { Router.setParams({ site: x.site }); Router.render({ silent: true }); } },
+        cols: [
+          { key: "site", label: "Compte", render: (x) => `<span class="cell-main">${esc(x.site || x.account_id)}</span>` },
+          { key: "per_day_7d", label: "Pins/jour · 7 j", r: 1, num: 1, value: (x) => num(x.per_day_7d), cls: (x) => (num(x.per_day_7d) > 8 ? "t-crit" : ""), render: (x) => fmtDec(x.per_day_7d) },
+          { key: "per_day_prev", label: "Avant", r: 1, num: 1, value: (x) => num(x.per_day_prev), render: (x) => fmtDec(x.per_day_prev) },
+          { key: "impr_per_pin_recent", label: "Impr./pin récents", r: 1, num: 1, value: (x) => numOrNull(x.impr_per_pin_recent), render: (x) => fmtDec(x.impr_per_pin_recent) },
+          { key: "impr_per_pin_before", label: "Impr./pin avant", r: 1, num: 1, value: (x) => numOrNull(x.impr_per_pin_before), render: (x) => fmtDec(x.impr_per_pin_before) },
+          { key: "ctr_recent", label: "CTR", r: 1, num: 1, value: (x) => numOrNull(x.ctr_recent), render: (x) => fmtPct(x.ctr_recent, 2) },
+          { key: "clicks_recent", label: "Clics", r: 1, num: 1, value: (x) => num(x.clicks_recent), render: (x) => fmtFull(x.clicks_recent) },
+          { key: "verdict", label: "Diagnostic", render: (x) => stateTag(tone(x.verdict), x.verdict || "—") },
+        ] });
+    })()]);
+  };
+})();
+
+/* ── Indexation : courbe « % indexé » + sites bloqués ── */
+(() => {
+  const i0 = Views.index.init, l0 = Views.index.load;
+  Views.index.init = function (el) {
+    i0.call(this, el);
+    $("#idx-pkpis", el).insertAdjacentHTML("afterend", chartPanel({ id: "idx-rate", title: "Part des articles indexés", meta: "relevé toutes les heures depuis le 05/11", legend: [{ label: "% indexé", color: "--good" }] }));
+  };
+  Views.index.load = async function (ctx) {
+    await Promise.all([l0.call(this, ctx), (async () => {
+      const site = ctx.params.site || null;
+      try {
+        const t = await Store.get(`idx:trend:${site}`, () => rpc("index_trend", { p_site: site, p_days: 120 }), { force: ctx.force });
+        if (!ctx.alive()) return;
+        Charts.line("idx-rate", { title: "% indexé", labels: t.map((x) => x.day), series: [{ label: "% indexé", data: t.map((x) => (x.rate == null ? null : +(100 * x.rate).toFixed(1))), color: "--good", fill: true }],
+          empty: { title: "Historique en cours de constitution", text: "Un point par jour : la courbe apparaît dès le 2e jour." } });
+        const last = t[t.length - 1];
+        const m = $("#meta-idx-rate", ctx.el); if (m && last) m.textContent = `${fmtPct(last.rate, 1)} aujourd'hui · ${fmtFull(last.indexed)} / ${fmtFull(last.total)}`;
+      } catch (e) { Charts.error("idx-rate", e); }
+    })()]);
+  };
+})();
+
+/* ── Liens cassés : chargés avant le rendu de Pipeline et Pinterest (badges) ── */
+["pipeline", "pinterest"].forEach((v) => { const l0 = Views[v].load; Views[v].load = async function (ctx) { await LinkHealth.load(ctx.force); return l0.call(this, ctx); }; });
 
 /* ═══════════ Démarrage ═══════════ */
 Nav.build();

@@ -10,8 +10,8 @@ export const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
 
 export const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, mcp-protocol-version, mcp-session-id",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 };
 
 export function json(data: unknown, status = 200): Response {
@@ -92,7 +92,7 @@ export async function upsertChunks(table: string, rows: Record<string, unknown>[
 // ───────────── Google ─────────────
 // Secrets pasted in the dashboard often carry spaces, newlines or quotes: clean them.
 export function cleanSecret(v: string | undefined): string {
-  return (v || "").replace(/[\s​-‍﻿]+/g, "").replace(/^["'`]+|["'`]+$/g, "");
+  return (v || "").replace(/[\s\u200B-\u200D\uFEFF]+/g, "").replace(/^["'`]+|["'`]+$/g, "");
 }
 export const GOOGLE_CLIENT_ID = cleanSecret(Deno.env.get("GOOGLE_CLIENT_ID"));
 export const GOOGLE_CLIENT_SECRET = cleanSecret(Deno.env.get("GOOGLE_CLIENT_SECRET"));
@@ -108,6 +108,7 @@ export function googleDiag() {
     secret_starts_gocspx: GOOGLE_CLIENT_SECRET.startsWith("GOCSPX-"),
     secret_raw_length: rawS.length,
     secret_clean_length: GOOGLE_CLIENT_SECRET.length,
+    secret_tail: GOOGLE_CLIENT_SECRET.slice(-4),
   };
 }
 export const GOOGLE_REDIRECT_URI = `${SUPABASE_URL}/functions/v1/google-auth`;
@@ -164,7 +165,7 @@ export async function gapi<T = any>(url: string, token: string, body?: unknown):
     }
     return data as T;
   }
-  throw new Error(`Google API still failing after retries: ${url}`);
+  throw new Error(`Google API still failing after retries (429/5xx): ${url}`);
 }
 
 // ───────────── Alerts ─────────────
